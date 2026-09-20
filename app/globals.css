@@ -33,15 +33,25 @@ html {
 }
 
 body {
-  background:
-    radial-gradient(110% 70% at 8% 0%, rgb(255 246 230 / 0.9), transparent 58%),
-    radial-gradient(85% 55% at 100% 18%, rgb(201 160 239 / 0.12), transparent 52%),
-    radial-gradient(95% 60% at 50% 100%, var(--tint-wash), transparent 58%),
-    linear-gradient(180deg, var(--cream), var(--paper) 38%, var(--paper));
-  background-color: var(--paper);
+  background: transparent;
+  background-color: #1c1814;
   color: var(--ink);
   font-family: var(--font-barlow), "Arial Narrow", sans-serif;
-  transition: background-color 200ms linear;
+  transition:
+    background-color 200ms linear,
+    color 200ms linear;
+}
+
+.story-page {
+  isolation: isolate;
+}
+
+.story-about {
+  color: var(--ink);
+}
+
+.story-about .text-muted {
+  color: color-mix(in srgb, var(--ink) 55%, transparent);
 }
 
 html.has-cursor-none,
@@ -59,12 +69,21 @@ html.has-cursor-none * {
   will-change: transform;
 }
 
+@property --cursor-heat {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
 .studio-cursor {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--lavender);
-  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.9);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.9),
+    0 0 calc(6px + var(--cursor-heat) * 22px) calc(var(--cursor-heat) * 3px)
+      rgb(201 160 239 / calc(0.12 + var(--cursor-heat) * 0.48));
   transition:
     width 120ms ease,
     height 120ms ease,
@@ -109,93 +128,18 @@ html.has-cursor-none * {
   color: var(--ink);
 }
 
-.hero-still {
+.hero-warp {
   opacity: 0;
-  transform: scale(1.035);
-  transition:
-    opacity 1.1s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 1.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 1.1s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.hero-still.is-awake {
+.hero-warp.is-awake,
+.hero-warp:has(.hero-warp__fallback) {
   opacity: 1;
-  transform: scale(1);
 }
 
-.hero-strips {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  --spot-on: 0;
-  --spot-x: -999px;
-  --spot-y: -999px;
-  --spot-r: 260px;
-}
-
-.hero-strip {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: var(--left);
-  width: var(--width);
-  overflow: hidden;
-  transform: translate3d(0, 0, 0);
-  transition: transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: transform;
-}
-
-.hero-strips.is-open .hero-strip {
-  transform: translate3d(calc(var(--dir) * 5px), 0, 0);
-}
-
-.hero-strips.is-breathing .hero-strip {
-  animation: hero-rib-breath 1.8s cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: calc(var(--i) * 8ms);
-}
-
-@keyframes hero-rib-breath {
-  0% {
-    transform: translate3d(0, 0, 0);
-  }
-  35% {
-    transform: translate3d(calc(var(--dir) * 4px), 0, 0);
-  }
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-}
-
-.hero-strip__fill {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  width: var(--hero-w);
-  left: calc(-1 * var(--left));
-  background-repeat: no-repeat;
-  background-size: cover;
-  background-position: 68% 50%;
-}
-
-.hero-strip__color {
-  filter: saturate(1.35) contrast(1.12);
-  opacity: var(--spot-on);
-  pointer-events: none;
-  mask-image: radial-gradient(
-    circle var(--spot-r) at var(--spot-x) var(--spot-y),
-    #000 0%,
-    rgb(0 0 0 / 0.72) 22%,
-    rgb(0 0 0 / 0.38) 48%,
-    rgb(0 0 0 / 0.12) 74%,
-    transparent 100%
-  );
-  -webkit-mask-image: radial-gradient(
-    circle var(--spot-r) at var(--spot-x) var(--spot-y),
-    #000 0%,
-    rgb(0 0 0 / 0.72) 22%,
-    rgb(0 0 0 / 0.38) 48%,
-    rgb(0 0 0 / 0.12) 74%,
-    transparent 100%
-  );
+.hero-warp__fallback {
+  filter: grayscale(1) contrast(1.12) brightness(0.96);
 }
 
 .hero-enter {
@@ -206,7 +150,8 @@ html.has-cursor-none * {
     transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.hero-stage.is-ready .hero-enter {
+.hero-stage.is-ready .hero-enter,
+.story-page.is-ready .hero-enter {
   opacity: 1;
   transform: translate3d(0, 0, 0);
 }
@@ -267,22 +212,11 @@ html.has-cursor-none * {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hero-still,
+  .hero-warp,
   .hero-enter {
     opacity: 1;
     transform: none;
     transition: none;
-  }
-
-  .hero-strip {
-    transition: none;
-    will-change: auto;
-    animation: none !important;
-  }
-
-  .hero-strips.is-open .hero-strip,
-  .hero-strips.is-breathing .hero-strip {
-    transform: none;
   }
 }
 

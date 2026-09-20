@@ -87,6 +87,8 @@ export const photos: Photo[] = [
 ];
 
 export const heroPhoto = {
-  src: "/photos/hero-landing.jpg",
-  alt: "Placeholder hero still — portrait behind ribbed glass",
+  src: "/photos/hero-warp.jpg",
+  flowSrc: "/photos/warp-flow.webp",
+  bleedSrc: "/photos/hero-warp-bleed.jpg",
+  alt: "Mootez Boughattas, warm-lit portrait pulled through a warped surface",
 };

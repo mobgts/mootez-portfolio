@@ -79,6 +79,11 @@ export function CursorRevealProvider({ children }: { children: ReactNode }) {
     let primed = false;
     let snapUntil = 0;
     let raf = 0;
+    let lastX = 0;
+    let lastY = 0;
+    let velX = 0;
+    let velY = 0;
+    let wasVisible = false;
 
     const setTarget = (clientX: number, clientY: number, snap = false) => {
       targetX = clientX;
@@ -114,6 +119,17 @@ export function CursorRevealProvider({ children }: { children: ReactNode }) {
         ? kindAtPoint(targetX, targetY)
         : { kind: "default" as CursorKind, fontSize: 16 };
 
+      // Speed off the drawn position, so the dot leans exactly as far as it is
+      // actually travelling. Skipped across the gap where it leaves and returns.
+      const stepX = visible && wasVisible ? x - lastX : 0;
+      const stepY = visible && wasVisible ? y - lastY : 0;
+      lastX = x;
+      lastY = y;
+      wasVisible = visible;
+      velX += (stepX - velX) * 0.3;
+      velY += (stepY - velY) * 0.3;
+      const heat = Math.min(1, Math.hypot(velX, velY) / 24);
+
       listeners.current.forEach((fn) =>
         fn({ x, y, fine: true, kind: next.kind }),
       );
@@ -121,8 +137,19 @@ export function CursorRevealProvider({ children }: { children: ReactNode }) {
       const follow = followRef.current;
       const cursor = cursorRef.current;
       if (follow) {
+        // Stretch along the run and pinch across it, the way a dot of light
+        // smears when you flick it. The caret keeps its shape.
+        const stretch = next.kind === "text" ? 0 : heat;
+        const angle = (Math.atan2(velY, velX) * 180) / Math.PI;
+        const lean =
+          stretch > 0.01
+            ? ` rotate(${angle}deg) scale(${1 + stretch * 0.7}, ${
+                1 - stretch * 0.32
+              }) rotate(${-angle}deg)`
+            : "";
         follow.style.opacity = visible ? "1" : "0";
-        follow.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
+        follow.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)${lean}`;
+        follow.style.setProperty("--cursor-heat", stretch.toFixed(3));
       }
       if (cursor) {
         const caret = next.kind === "text";

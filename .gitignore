@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+preview-hero-warp.png
 
 # debug
 npm-debug.log*

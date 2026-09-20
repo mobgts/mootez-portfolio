@@ -68,7 +68,7 @@ export function ImageWork() {
 
       {active ? (
         <div
-          className="fixed inset-0 z-50 flex flex-col bg-ink text-paper"
+          className="fixed inset-0 z-50 flex flex-col bg-[#221c16] text-[#f7f0e4]"
           role="dialog"
           aria-modal="true"
           aria-label={active.filename}

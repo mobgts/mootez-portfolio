@@ -3,7 +3,10 @@ import { SectionMark } from "./SectionMark";
 
 export function About() {
   return (
-    <section id="about" className="scroll-mt-16 px-4 py-20 md:px-8 md:py-28">
+    <section
+      id="about"
+      className="story-about relative z-10 scroll-mt-16 px-5 py-20 md:px-8 md:py-28"
+    >
       <SectionMark label="About me" />
       <div className="grid gap-10 md:grid-cols-[1.1fr_0.9fr] md:gap-16">
         <div className="space-y-6 text-[22px] font-medium leading-[1.35] tracking-[0.01em] md:text-[28px]">
