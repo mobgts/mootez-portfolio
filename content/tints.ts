@@ -4,15 +4,15 @@ export type TintStop = {
   wash: [number, number, number];
 };
 
-// Dark olive → olive → deep olive → beige → warm. Landing already carries colour.
+// Light olive through the hero → deep olive → beige → warm.
 export const TINT_STOPS: TintStop[] = [
-  { id: "top", paper: [86, 82, 58], wash: [108, 102, 72] },
+  { id: "top", paper: [182, 174, 128], wash: [150, 144, 98] },
   { id: "about", paper: [182, 174, 128], wash: [150, 144, 98] },
   { id: "image", paper: [160, 154, 108], wash: [126, 122, 80] },
   { id: "sound", paper: [142, 138, 94], wash: [108, 106, 68] },
   { id: "dev", paper: [204, 194, 160], wash: [178, 168, 130] },
-  { id: "process", paper: [232, 220, 194], wash: [210, 198, 166] },
-  { id: "contact", paper: [246, 234, 208], wash: [228, 212, 176] },
+  { id: "process", paper: [220, 208, 178], wash: [198, 186, 152] },
+  { id: "contact", paper: [232, 220, 192], wash: [214, 200, 168] },
 ];
 
 export function mixRgb(
@@ -58,14 +58,8 @@ export function sampleTintAt(scrollY: number, viewH: number): {
   const span = Math.max(1, b.top - a.top);
   const progress = a === b ? 0 : (y - a.top) / span;
 
-  // Landing → olive: long soft grade that already shows colour at rest, then
-  // eases the rest of the way through the hero instead of sitting on grey.
-  const t =
-    a === b
-      ? 0
-      : a.id === "top" && b.id === "about"
-        ? smoothstep(0.32 + clamp01(progress) * 0.68)
-        : smoothstep(progress);
+  // Landing holds light olive; later stops ease on their own.
+  const t = a === b ? 0 : smoothstep(progress);
 
   return {
     paper: mixRgb(a.paper, b.paper, t),

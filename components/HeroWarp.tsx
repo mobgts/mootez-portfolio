@@ -60,8 +60,12 @@ vec2 unitOr(vec2 v, vec2 fallback) {
 // Where in the silk map a point of the page lands. The map is square and tiled at
 // the viewport width, so a page pixel and a map pixel are the same size in both
 // axes; mirroring on alternate tiles keeps the drape meeting edge to edge.
+// On narrow screens the width-based period is short, so stretch the tile taller
+// (toward a couple of viewports) and the drape runs further before it re-stamps.
 vec2 silkUv(float x, float pageY) {
-  float tileH = max(uRes.x, 640.0);
+  float base = max(uRes.x, 640.0);
+  float narrow = 1.0 - smoothstep(640.0, 960.0, uRes.x);
+  float tileH = mix(base, max(base, uViewH * 2.4), narrow);
   return vec2(x, abs(fract((pageY / tileH) * 0.5) * 2.0 - 1.0));
 }
 
@@ -153,10 +157,24 @@ void main() {
   float undertow = sin(journey * 2.2 + restRidge * 2.4) * 0.3;
   float ripple = (ball + undertow) * uMotion;
 
+  // Extra continuity bead: seeds in the left wrap and rides the same fold line
+  // downward so the eye catches the drape starting there and continuing on.
+  vec2 aheadPt = px + restDir * ends.x;
+  vec2 behindPt = px - restDir * ends.y;
+  float fromLeft = aheadPt.x < behindPt.x ? ends.x : ends.y;
+  float leadLane = max(uViewH, 420.0) * 1.05;
+  float leadJourney = (docY * 0.65 + fromLeft * 1.55 + restRidge * 55.0 - uTime * 110.0) / leadLane;
+  float leadSeat = fract(leadJourney) - 0.5;
+  float leadBall = exp(-leadSeat * leadSeat * 16.0);
+  float leadOnLine = exp(-restRidge * restRidge * 4.2) * (0.25 + 0.75 * rest.b);
+  float leadLeft = 1.0 - smoothstep(0.0, 0.38, p.x);
+  float leadBead = leadBall * leadOnLine * (0.55 + 0.9 * leadLeft) * uMotion;
+
   // Re-read the fold map further along the fold's own line. Shifting the lookup
   // rather than the output means the drape itself rolls, which is what carries the
   // movement onto bare paper further down the page where there is no photo left.
   vec2 slide = (travel * 60.0 + vec2(-travel.y, travel.x) * 26.0) * ripple;
+  slide += (travel * 78.0 + vec2(-travel.y, travel.x) * 34.0) * leadBead;
   vec4 flow = texture2D(uFlow, silkUv(p.x + slide.x / uRes.x, docY + slide.y));
   vec2 tangent = unitOr(flow.rg * 2.0 - 1.0, vec2(1.0, 0.0));
   vec2 perp = vec2(-tangent.y, tangent.x);
@@ -186,19 +204,51 @@ void main() {
   float wake = lead * exp(-lead * lead * 2.2) * 3.4;
   float drag = wake * speed;
 
+  // Rough photo UV before warp — used to mask body/arm without fighting the face.
+  vec2 preUv = vec2(sampleX, (heroP.y - 0.5) / fit.y + 0.5 - 0.035);
+  float faceKeep = 1.0 - smoothstep(
+    0.10,
+    0.24,
+    length((preUv - vec2(0.48, 0.62)) * vec2(1.15, 1.4))
+  );
+  // Lit left arm/shoulder → down the sleeve (viewer left). Face stays locked.
+  float armDown = 1.0 - smoothstep(0.04, 0.36, preUv.y);
+  float leftArm = (1.0 - smoothstep(0.18, 0.52, preUv.x))
+                * smoothstep(0.02, 0.22, preUv.y)
+                * (1.0 - smoothstep(0.56, 0.76, preUv.y))
+                * (1.0 - faceKeep);
+  // Stronger further down the arm; quiet at the shoulder.
+  leftArm *= mix(0.25, 1.4, armDown);
+  float armPulse = (0.55 + 0.65 * abs(ripple) + 0.85 * leadBead) * uMotion;
+
   // The swell drags the portrait along its folds; the cursor adds a tighter pull,
   // shearing the cloth forward ahead of the sweep and back behind it.
-  float amp = (0.005 * fall * (1.0 + 1.3 * speed) + 0.008 * ripple * faceProtect) * lineStrength;
+  // Arm also rides the swell even where the fold map is thin over the body.
+  float amp = (0.005 * fall * (1.0 + 1.3 * speed) + 0.008 * ripple * faceProtect + 0.011 * leadBead * faceProtect) * lineStrength;
+  amp += (0.024 * ripple + 0.032 * leadBead) * leftArm * armPulse;
   vec2 push = tangent * 0.35 + perp * (ridge * 0.55) + sweepDir * drag * 1.1;
+  // Soft vertical sway on the arm so it reads as cloth-drag, not a hard shear.
+  push += vec2(-0.22, 1.15) * leftArm * armPulse;
   vec2 uvDelta = vec2(push.x / aspect, push.y) * amp / fit;
 
-  vec2 frameUv = vec2(sampleX, (heroP.y - 0.5) / fit.y + 0.5 - 0.035);
+  vec2 frameUv = preUv;
   vec2 guard = smoothstep(vec2(0.0), vec2(0.04), frameUv)
              * smoothstep(vec2(0.0), vec2(0.04), 1.0 - frameUv);
   vec2 sampleUv = clamp(frameUv + uvDelta * min(guard.x, guard.y), 0.0, 1.0);
   sampleUv = mix(sampleUv, vec2(sampleUv.x, 0.02), step(heroH, docY));
 
-  vec3 sharpRaw = texture2D(uPhoto, sampleUv).rgb;
+  // Soft vertical motion smear — stronger on the arm, timed to the silk pulse.
+  float smearAmt = mix(0.35, 0.95, clamp(leftArm * armPulse, 0.0, 1.0));
+  vec2 mDir = vec2(0.0025, 0.014) * mix(1.0, 3.2, clamp(leftArm * armPulse, 0.0, 1.0));
+  vec3 sharp = texture2D(uPhoto, sampleUv).rgb;
+  vec3 smear = sharp * 0.30;
+  smear += texture2D(uPhoto, clamp(sampleUv + mDir * 0.4, 0.0, 1.0)).rgb * 0.18;
+  smear += texture2D(uPhoto, clamp(sampleUv - mDir * 0.4, 0.0, 1.0)).rgb * 0.18;
+  smear += texture2D(uPhoto, clamp(sampleUv + mDir * 0.8, 0.0, 1.0)).rgb * 0.12;
+  smear += texture2D(uPhoto, clamp(sampleUv - mDir * 0.8, 0.0, 1.0)).rgb * 0.12;
+  smear += texture2D(uPhoto, clamp(sampleUv + mDir, 0.0, 1.0)).rgb * 0.05;
+  smear += texture2D(uPhoto, clamp(sampleUv - mDir, 0.0, 1.0)).rgb * 0.05;
+  vec3 sharpRaw = mix(sharp, smear, smearAmt);
   vec3 hazeRaw = fuzzSample(sampleUv + tangent * fuzz * 0.02, 0.006 + fuzz * 0.07);
   vec3 raw = mix(sharpRaw, hazeRaw, smoothstep(0.0, 0.62, fuzz));
 
@@ -217,7 +267,7 @@ void main() {
   float sheen = max(0.0, ridgeWide) * lineStrength;
   float trough = max(0.0, -ridgeWide) * lineStrength;
 
-  float portraitSilk = mix(0.18, 1.0, faceProtect);
+  float portraitSilk = mix(0.18, 1.0, max(faceProtect, clamp(leftArm, 0.0, 1.0) * 0.9));
 
   // What the hand does to the light. Shadow gathers in the cloth behind it, which
   // is still dropping back, and deepest where that cloth was already a trough; the
@@ -233,6 +283,7 @@ void main() {
   // Light gathers on the folds the swell is passing over, so you can see where it
   // has got to even on bare paper, where there is no photo detail left to smear.
   float crest = max(0.0, ball - 0.12) * lineStrength * uMotion;
+  float leadCrest = max(0.0, leadBead - 0.08) * lineStrength;
 
   // The landing wears the most drape: beside the name up top, and along the
   // floor under the portrait. It fades out as the hero leaves.
@@ -249,15 +300,31 @@ void main() {
   portrait *= clamp(1.0 - trough * 0.72 * portraitSilk * landingSilk, 0.22, 1.0);
   portrait += pow(sheen, 1.4) * (0.2 + 0.12 * fall) * portraitSilk * landingSilk;
   portrait *= 1.0 + crest * 0.14 * portraitSilk;
+  portrait *= 1.0 + leadCrest * 0.22 * portraitSilk;
   portrait *= 1.0 - 0.18 * fuzz * fuzz;
   portrait *= 1.0 - 0.08 * length((heroP - 0.5) * vec2(heroAspect, 1.0));
+
+  // Inverted stamp on the ear (photo UV). Taller top/bottom; left side doubled.
+  vec2 earC = vec2(0.504, 0.692);
+  float earL = 0.132;
+  float earR = 0.028;
+  float earT = 0.064;
+  float earB = 0.082;
+  float earMask =
+    step(earC.x - earL, sampleUv.x) * step(sampleUv.x, earC.x + earR) *
+    step(earC.y - earB, sampleUv.y) * step(sampleUv.y, earC.y + earT);
+  vec3 earInv = 1.0 - portrait;
+  earInv = mix(earInv, earInv * vec3(0.82, 0.76, 1.08) + vec3(0.06, 0.04, 0.12), 0.45);
+  portrait = mix(portrait, earInv, earMask);
 
   // Scroll-graded field: silk on the live paper colour — soft folds, no bright ridges.
   vec3 fieldCol = mix(uPaper, uWash, 0.12 + 0.14 * trough);
   fieldCol *= clamp(1.0 + fold * 0.32 * landingSilk, 0.4, 1.55);
   fieldCol *= clamp(1.0 - trough * 0.26 * landingSilk, 0.4, 1.0);
   fieldCol *= 1.0 + crest * 0.2;
+  fieldCol *= 1.0 + leadCrest * 0.38;
   fieldCol += sheen * 0.045 * landingSilk;
+  fieldCol += leadBead * lineStrength * 0.07;
   vec3 lit = mix(fieldCol, mix(uWash, vec3(0.86, 0.8, 0.68), 0.22), 0.4);
   fieldCol = mix(fieldCol, lit, reveal);
 
@@ -346,8 +413,8 @@ export function HeroWarp({ src, flowSrc, bleedSrc, alt }: HeroWarpProps) {
   const pointer = useRef({ x: 0, y: 0, on: 0, moved: false });
   const scrollRef = useRef({ y: 0, viewH: 1, heroH: 1, pageH: 1 });
   const tintRef = useRef({
-    paper: [86 / 255, 82 / 255, 58 / 255] as [number, number, number],
-    wash: [108 / 255, 102 / 255, 72 / 255] as [number, number, number],
+    paper: [182 / 255, 174 / 255, 128 / 255] as [number, number, number],
+    wash: [150 / 255, 144 / 255, 98 / 255] as [number, number, number],
   });
   const motionRef = useRef(1);
 

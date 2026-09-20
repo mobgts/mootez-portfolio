@@ -30,7 +30,7 @@ export function PageTint() {
       root.style.setProperty("--paper", rgb(current.paper));
       root.style.setProperty(
         "--cream",
-        rgb(mixRgb(current.paper, [247, 240, 228], 0.35)),
+        rgb(mixRgb(current.paper, [234, 223, 206], 0.28)),
       );
       root.style.setProperty(
         "--tint-wash",

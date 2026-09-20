@@ -164,6 +164,16 @@ html.has-cursor-none * {
   transition-delay: 0.34s;
 }
 
+.hero-enter--stack {
+  transition-delay: 0.42s;
+}
+
+/* Match HeroWarp invert, pushed toward site lavender — denser, less white. */
+.hero-staple__img {
+  filter: invert(1) sepia(0.55) hue-rotate(235deg) saturate(1.85)
+    brightness(0.82) contrast(1.18);
+}
+
 .hero-enter--year {
   transition-delay: 0.28s;
 }
