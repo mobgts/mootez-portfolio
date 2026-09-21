@@ -187,6 +187,7 @@ html.has-cursor-none * {
 }
 
 .hero-nav-embed ul {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
