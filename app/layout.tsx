@@ -1,18 +1,16 @@
 import type { Metadata } from "next";
-import { Barlow_Condensed, Bebas_Neue } from "next/font/google";
+import { Space_Grotesk, Syne } from "next/font/google";
 import { CursorRevealProvider } from "@/components/CursorReveal";
 import "./globals.css";
 
-const bebas = Bebas_Neue({
-  weight: "400",
+const syne = Syne({
   subsets: ["latin"],
-  variable: "--font-bebas",
+  variable: "--font-syne",
 });
 
-const barlow = Barlow_Condensed({
-  weight: ["400", "500", "600"],
+const space = Space_Grotesk({
   subsets: ["latin"],
-  variable: "--font-barlow",
+  variable: "--font-space",
 });
 
 export const metadata: Metadata = {
@@ -25,7 +23,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${bebas.variable} ${barlow.variable} h-full antialiased`}
+      className={`${syne.variable} ${space.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-paper text-ink">
         <CursorRevealProvider>{children}</CursorRevealProvider>

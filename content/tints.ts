@@ -4,15 +4,18 @@ export type TintStop = {
   wash: [number, number, number];
 };
 
-// Light olive through the hero → deep olive → beige → warm.
+export type TintSample = {
+  paper: [number, number, number];
+  wash: [number, number, number];
+};
+
+// Studio olive — held soft through the story so scroll never snaps.
 export const TINT_STOPS: TintStop[] = [
-  { id: "top", paper: [182, 174, 128], wash: [150, 144, 98] },
-  { id: "about", paper: [182, 174, 128], wash: [150, 144, 98] },
-  { id: "image", paper: [160, 154, 108], wash: [126, 122, 80] },
-  { id: "sound", paper: [142, 138, 94], wash: [108, 106, 68] },
-  { id: "dev", paper: [204, 194, 160], wash: [178, 168, 130] },
-  { id: "process", paper: [220, 208, 178], wash: [198, 186, 152] },
-  { id: "contact", paper: [232, 220, 192], wash: [214, 200, 168] },
+  { id: "top", paper: [182, 187, 111], wash: [147, 149, 73] },
+  { id: "about", paper: [182, 187, 111], wash: [147, 149, 73] },
+  { id: "sound", paper: [152, 164, 88], wash: [118, 128, 56] },
+  { id: "dev", paper: [172, 170, 108], wash: [140, 138, 74] },
+  { id: "contact", paper: [210, 194, 148], wash: [180, 164, 118] },
 ];
 
 export function mixRgb(
@@ -36,33 +39,58 @@ function smoothstep(t: number) {
   return x * x * (3 - 2 * x);
 }
 
-export function sampleTintAt(scrollY: number, viewH: number): {
-  paper: [number, number, number];
-  wash: [number, number, number];
-} {
-  // Read a bit above mid-viewport so the next stop arrives as the section does.
-  const mid = viewH * 0.34;
-  const points = TINT_STOPS.map((stop) => {
-    const el =
-      typeof document !== "undefined" ? document.getElementById(stop.id) : null;
-    const top = el ? el.getBoundingClientRect().top + window.scrollY : 0;
-    return { ...stop, top };
-  }).sort((a, b) => a.top - b.top);
+export function sampleTintAt(
+  scrollY: number,
+  viewH: number,
+  stops: TintStop[] = TINT_STOPS,
+): TintSample {
+  // Sample a touch above mid-viewport so the next stop arrives with the section.
+  const y = scrollY + viewH * 0.34;
+  // Wide falloff so short sections (image) still crossfade over ~a viewport.
+  const radius = Math.max(280, viewH * 0.9);
 
-  const y = scrollY + mid;
-  let i = 0;
-  while (i < points.length - 1 && y >= points[i + 1].top) i += 1;
+  const points = stops
+    .map((stop, index) => {
+      const el =
+        typeof document !== "undefined" ? document.getElementById(stop.id) : null;
+      const top = el
+        ? el.getBoundingClientRect().top + window.scrollY
+        : 1e9 + index;
+      return { ...stop, top };
+    })
+    .filter((p) => p.top < 1e9)
+    .sort((a, b) => a.top - b.top);
 
-  const a = points[i];
-  const b = points[Math.min(i + 1, points.length - 1)];
-  const span = Math.max(1, b.top - a.top);
-  const progress = a === b ? 0 : (y - a.top) / span;
+  if (points.length === 0) {
+    const fallback = stops[0];
+    return { paper: [...fallback.paper], wash: [...fallback.wash] };
+  }
 
-  // Landing holds light olive; later stops ease on their own.
-  const t = a === b ? 0 : smoothstep(progress);
+  let paper: [number, number, number] = [0, 0, 0];
+  let wash: [number, number, number] = [0, 0, 0];
+  let wSum = 0;
+
+  for (const p of points) {
+    const d = Math.abs(y - p.top);
+    const w = smoothstep(1 - d / radius);
+    if (w <= 0) continue;
+    paper[0] += p.paper[0] * w;
+    paper[1] += p.paper[1] * w;
+    paper[2] += p.paper[2] * w;
+    wash[0] += p.wash[0] * w;
+    wash[1] += p.wash[1] * w;
+    wash[2] += p.wash[2] * w;
+    wSum += w;
+  }
+
+  if (wSum < 1e-6) {
+    // Past the last stop (or before the first): hold the nearest end.
+    const end = y <= points[0].top ? points[0] : points[points.length - 1];
+    return { paper: [...end.paper], wash: [...end.wash] };
+  }
 
   return {
-    paper: mixRgb(a.paper, b.paper, t),
-    wash: mixRgb(a.wash, b.wash, t),
+    paper: [paper[0] / wSum, paper[1] / wSum, paper[2] / wSum],
+    wash: [wash[0] / wSum, wash[1] / wSum, wash[2] / wSum],
   };
 }

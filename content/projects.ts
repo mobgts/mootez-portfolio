@@ -9,6 +9,8 @@ export const projects: Project[] = [
     summary:
       "Peer-to-peer housing for Erasmus students: list the room you leave, find the one you need, talk before you commit. No fees. Built with Ahmed Mahouachi from a bachelor thesis into a live platform, now in partnership with ESN Paris, ESN Bonn, and ESN Aachen.",
     url: "https://co-erasmus.eu/",
+    preview: true,
+    embedQuery: "consent=necessary",
   },
   {
     slug: "project-002",

@@ -85,7 +85,10 @@ export function CursorRevealProvider({ children }: { children: ReactNode }) {
     let velY = 0;
     let wasVisible = false;
 
+    let leaveTimer = 0;
+
     const setTarget = (clientX: number, clientY: number, snap = false) => {
+      window.clearTimeout(leaveTimer);
       targetX = clientX;
       targetY = clientY;
       if (!primed || snap) {
@@ -98,13 +101,43 @@ export function CursorRevealProvider({ children }: { children: ReactNode }) {
 
     const move = (event: PointerEvent) => setTarget(event.clientX, event.clientY);
     const leave = () => {
-      targetX = -9999;
-      targetY = -9999;
-      primed = false;
+      // Entering the embed iframe also fires document mouseleave — delay hide so
+      // the embed bridge can keep driving the portfolio cursor without a blink.
+      window.clearTimeout(leaveTimer);
+      leaveTimer = window.setTimeout(() => {
+        targetX = -9999;
+        targetY = -9999;
+        primed = false;
+      }, 80);
     };
     const scroll = () => {
       if (!primed) return;
       setTarget(targetX, targetY, true);
+    };
+
+    const onEmbedPointer = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data || data.source !== "portfolio-embed-pointer") return;
+
+      if (data.type === "leave") {
+        leave();
+        return;
+      }
+      if (data.type !== "move" || typeof data.x !== "number" || typeof data.y !== "number") {
+        return;
+      }
+
+      const frame = document.querySelector<HTMLIFrameElement>(
+        'iframe[data-embed-cursor="1"]',
+      );
+      if (!frame) return;
+
+      const rect = frame.getBoundingClientRect();
+      const layoutW = frame.offsetWidth || 1;
+      const layoutH = frame.offsetHeight || 1;
+      const scaleX = rect.width / layoutW;
+      const scaleY = rect.height / layoutH;
+      setTarget(rect.left + data.x * scaleX, rect.top + data.y * scaleY);
     };
 
     const tick = () => {
@@ -166,14 +199,17 @@ export function CursorRevealProvider({ children }: { children: ReactNode }) {
     window.addEventListener("mouseleave", leave);
     window.addEventListener("scroll", scroll, { passive: true, capture: true });
     window.addEventListener("wheel", scroll, { passive: true, capture: true });
+    window.addEventListener("message", onEmbedPointer);
     raf = requestAnimationFrame(tick);
 
     return () => {
       document.documentElement.classList.remove("has-cursor-none");
+      window.clearTimeout(leaveTimer);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("mouseleave", leave);
       window.removeEventListener("scroll", scroll, true);
       window.removeEventListener("wheel", scroll, true);
+      window.removeEventListener("message", onEmbedPointer);
       cancelAnimationFrame(raf);
     };
   }, []);

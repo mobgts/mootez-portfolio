@@ -11,47 +11,18 @@ export const site = {
     lng: "7°05′59″ E",
   },
   location: "Bonn, Germany",
-  email: "hello@mootezboughattas.com",
+  email: "yowassup@mootez.com",
   linkedin: "https://www.linkedin.com/in/mootez-boughattas-2371261a8",
   nav: [
-    { id: "about", label: "about" },
     { id: "image", label: "image" },
     { id: "sound", label: "sound" },
     { id: "dev", label: "dev" },
+    { id: "about", label: "about" },
     { id: "contact", label: "contact" },
   ] satisfies NavItem[],
   about: {
-    lead: "I spend time on stills, on nights, and on products that have to work in the world. Bonn is the base. The rest is movement.",
-    body: "The photographs are how I look. The sets are how a room is held. The software is how an idea is asked to live outside a notebook. Co-Erasmus started as a bachelor thesis and became a room-swap for Erasmus students — peer to peer, no fees, built with Ahmed Mahouachi.",
-    focus:
-      "Nothing here is a separate brand. Image, sound, and code are one studio. Replace the placeholder stills and mixes with the work when it is ready to sit in this sequence.",
+    lead: "I have been reflecting on how i am spending my time lately and felt a bit scattered between all these digital hobbies/not so much hobbies sometimes, and thought i need a structure going on from here. This portfolio serves as a consolidation point and a start to a long journey of learning, that i would love to take you on with me.",
+    body: "My name is Mootez Boughattas, currently Bonn based, and i feel like i don't have much to say. If something comes up i will update this section.",
   },
   practices: ["Image / Photography", "Sound / DJ sets", "Dev / Products"],
-  process: [
-    {
-      n: "01",
-      title: "Collect",
-      text: "Stills, recordings, and problems from the street — not a brief, a habit.",
-    },
-    {
-      n: "02",
-      title: "Hold",
-      text: "Edit a series, a set, or a product until it has a shape that can stand alone.",
-    },
-    {
-      n: "03",
-      title: "Sequence",
-      text: "Put image, sound, and code on the same timeline. Cut what does not belong.",
-    },
-    {
-      n: "04",
-      title: "Ship",
-      text: "A print, a night, a live URL. The work is not finished in a folder.",
-    },
-    {
-      n: "05",
-      title: "Keep",
-      text: "Live with it. What still feels true stays on this page.",
-    },
-  ],
 };

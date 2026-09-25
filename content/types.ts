@@ -13,6 +13,12 @@ export type Photo = {
   span: "wide" | "tall" | "square";
 };
 
+export type Album = {
+  id: string;
+  label: string;
+  photos: Photo[];
+};
+
 export type Set = {
   slug: string;
   filename: string;
@@ -30,5 +36,12 @@ export type Project = {
   role: string;
   summary: string;
   url?: string;
+  /** When true, show project intro first; "See it" loads the live embed. */
+  preview?: boolean;
+  /**
+   * Query string appended when opening the live embed
+   * (e.g. "consent=necessary" for Co-Erasmus essential cookies).
+   */
+  embedQuery?: string;
   placeholder?: boolean;
 };

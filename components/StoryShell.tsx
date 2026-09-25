@@ -27,6 +27,7 @@ export function StoryShell({ children }: { children: ReactNode }) {
         src={heroPhoto.src}
         flowSrc={heroPhoto.flowSrc}
         bleedSrc={heroPhoto.bleedSrc}
+        maskSrc={heroPhoto.maskSrc}
         alt={heroPhoto.alt}
       />
       <div className="relative z-10">{children}</div>

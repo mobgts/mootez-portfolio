@@ -1,23 +1,25 @@
+import { About } from "@/components/About";
+import { AlbumHost } from "@/components/AlbumHost";
 import { Contact } from "@/components/Contact";
 import { DevWork } from "@/components/DevWork";
 import { Hero } from "@/components/Hero";
-import { ImageWork } from "@/components/ImageWork";
 import { PageTint } from "@/components/PageTint";
-import { Process } from "@/components/Process";
 import { SoundWork } from "@/components/SoundWork";
 import { StickyNav } from "@/components/StickyNav";
+import { StudioRail } from "@/components/StudioRail";
 import { StoryShell } from "@/components/StoryShell";
 
 export default function Home() {
   return (
     <StoryShell>
       <PageTint />
+      <StudioRail />
       <StickyNav />
+      <AlbumHost />
       <Hero />
-      <ImageWork />
       <SoundWork />
       <DevWork />
-      <Process />
+      <About />
       <Contact />
     </StoryShell>
   );
