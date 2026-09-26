@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { openAlbumDirect, openAlbumPicker } from "@/content/albumUi";
+import { openAlbumDirect } from "@/content/albumUi";
 import { getAlbum } from "@/content/photos";
 
 type CollageFit = {
@@ -238,7 +238,7 @@ export function Hero() {
   const stageRef = useRef<HTMLDivElement>(null);
   const fit = useCollageFit(sectionRef);
 
-  // Grow the hero just enough so Sound starts under the collage + CTA.
+  // Size hero to the collage so Sound sits at a consistent section gap.
   useEffect(() => {
     const section = sectionRef.current;
     const stage = stageRef.current;
@@ -248,8 +248,9 @@ export function Hero() {
       const sectionTop = section.getBoundingClientRect().top;
       const stageBottom = stage.getBoundingClientRect().bottom;
       const bottom = stageBottom - sectionTop;
-      const pad = 28;
-      section.style.minHeight = `${Math.max(window.innerHeight, Math.ceil(bottom + pad))}px`;
+      // Match section rhythm, slightly tighter into Sound.
+      const pad = window.matchMedia("(min-width: 768px)").matches ? 32 : 24;
+      section.style.minHeight = `${Math.ceil(bottom + pad)}px`;
     };
 
     sync();
@@ -265,11 +266,13 @@ export function Hero() {
   return (
     <section
       ref={sectionRef}
-      id="top"
+      id="image"
       data-story-hero
       data-hero-singles={fit.singles}
-      className="hero-stage relative z-10 min-h-svh w-full overflow-visible"
+      className="hero-stage relative z-10 w-full overflow-visible"
     >
+      {/* Keep #top for brand links while image nav scrolls here. */}
+      <div id="top" className="pointer-events-none absolute inset-x-0 top-0 h-px" aria-hidden />
       <div className="hero-collage pointer-events-none absolute inset-x-0 top-0 z-10 min-h-full">
         <div
           ref={stageRef}
@@ -295,13 +298,6 @@ export function Hero() {
             />
             <DoublesStack albumId="night" mirror large={fit.large} />
           </div>
-          <button
-            type="button"
-            onClick={() => openAlbumPicker()}
-            className="hero-enter hero-enter--stack pointer-events-auto mt-2 w-fit text-[12px] font-medium tracking-[0.14em] text-ink underline decoration-ink/35 underline-offset-[5px] transition-colors hover:text-olive-deep hover:decoration-olive-deep md:mt-3 md:text-[13px]"
-          >
-            see more
-          </button>
         </div>
       </div>
     </section>

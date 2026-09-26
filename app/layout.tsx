@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Syne } from "next/font/google";
+import { Bricolage_Grotesque, Instrument_Sans } from "next/font/google";
 import { CursorRevealProvider } from "@/components/CursorReveal";
 import "./globals.css";
 
-const syne = Syne({
+const display = Bricolage_Grotesque({
   subsets: ["latin"],
-  variable: "--font-syne",
+  variable: "--font-display-face",
 });
 
-const space = Space_Grotesk({
+const sans = Instrument_Sans({
   subsets: ["latin"],
-  variable: "--font-space",
+  variable: "--font-sans-face",
 });
 
 export const metadata: Metadata = {
@@ -23,7 +23,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${syne.variable} ${space.variable} h-full antialiased`}
+      className={`${display.variable} ${sans.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-paper text-ink">
         <CursorRevealProvider>{children}</CursorRevealProvider>

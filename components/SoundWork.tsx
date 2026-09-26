@@ -24,13 +24,15 @@ export function SoundWork() {
   const [playing, setPlaying] = useState(sets[0]?.slug ?? null);
 
   return (
-    <section id="sound" className="scroll-mt-16 px-4 py-16 md:px-8 md:py-24">
-      <SectionMark label="Sound" extra="DJ sets · mix placeholders" />
+    <section id="sound" className="scroll-mt-16 px-4 pt-6 pb-10 md:px-8 md:pt-8 md:pb-14">
+      <SectionMark label="Sound" />
       <div className="flex justify-center">
         <div className="sound-player">
           <div className="sound-player__header">
             <SoundCloudIcon />
-            <p className="sound-player__heading">Currently Playing</p>
+            <p className="sound-player__heading">
+              I&apos;ll be uploading my mixes here soon :)
+            </p>
           </div>
           {sets.map((set) => {
             const isPlaying = playing === set.slug;
@@ -58,7 +60,7 @@ export function SoundWork() {
                     src={set.cover}
                     alt=""
                     sizes="40px"
-                    radius={40}
+                    radius={4}
                     reveal={false}
                   />
                 </div>

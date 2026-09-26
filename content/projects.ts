@@ -13,12 +13,15 @@ export const projects: Project[] = [
     embedQuery: "consent=necessary",
   },
   {
-    slug: "project-002",
-    title: "Project 002",
-    year: "'—",
-    role: "Placeholder",
-    summary: "Add a product or project here. Title, year, a short case, a live link.",
-    placeholder: true,
+    slug: "portfolio",
+    title: "Portfolio",
+    year: "'26",
+    role: "Design · build",
+    summary:
+      "This site — image, sound, and products in one place. A living studio rather than a static CV, built to hold the work and grow with it.",
+    url: "/",
+    preview: true,
+    embedQuery: "embed=1",
   },
   {
     slug: "project-003",

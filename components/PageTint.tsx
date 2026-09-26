@@ -78,6 +78,7 @@ export function PageTint() {
       const washAlpha = 0.12 + 0.2 * clamp01(mapVibeColor(warmth) / 0.55);
 
       root.style.setProperty("--paper", rgb(current.paper));
+      root.style.setProperty("--wash", rgb(current.wash));
       root.style.setProperty(
         "--cream",
         rgb(mixRgb(current.paper, CREAM_LIFT, 0.5)),
@@ -97,7 +98,7 @@ export function PageTint() {
       root.style.setProperty("--muted", rgb(accent.muted));
       root.style.setProperty(
         "--cursor-glow",
-        `${Math.round(accent.accent[0])} ${Math.round(accent.accent[1])} ${Math.round(accent.accent[2])}`,
+        `${Math.round(accent.olive[0])} ${Math.round(accent.olive[1])} ${Math.round(accent.olive[2])}`,
       );
       root.style.setProperty("--staple-hue", `${accent.stapleHue.toFixed(1)}deg`);
       root.style.setProperty("--ink", rgb(accent.ink));

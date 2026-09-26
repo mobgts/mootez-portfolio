@@ -39,11 +39,11 @@ export function mapVibeColor(warmth: number) {
   return COLOR_FLOOR + t * (1 - COLOR_FLOOR);
 }
 
-// Calm mono at cream — olive/pink only arrive with tint.
+// Calm mono at cream — soft olive / apricot accents with tint (no pink).
 const ACCENT_CREAM: [number, number, number] = [88, 86, 80];
 const ACCENT_CREAM_DEEP: [number, number, number] = [48, 46, 42];
-const ACCENT_OLIVE: [number, number, number] = [222, 143, 208];
-const ACCENT_OLIVE_DEEP: [number, number, number] = [172, 93, 180];
+const ACCENT_OLIVE: [number, number, number] = [158, 152, 88];
+const ACCENT_OLIVE_DEEP: [number, number, number] = [108, 102, 52];
 const ACCENT_WARM: [number, number, number] = [240, 132, 98];
 const ACCENT_WARM_DEEP: [number, number, number] = [210, 86, 64];
 
@@ -73,7 +73,8 @@ export type VibeState = {
 
 type Listener = (v: VibeState) => void;
 
-let state: VibeState = { color: 0, silk: 0.2 };
+/** Notch defaults: tint = 4/6 → 0.6, movement = 2/6 → 0.2 */
+let state: VibeState = { color: 0.6, silk: 0.2 };
 const listeners = new Set<Listener>();
 
 function clamp01(n: number) {

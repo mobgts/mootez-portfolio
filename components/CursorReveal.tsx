@@ -70,6 +70,34 @@ export function CursorRevealProvider({ children }: { children: ReactNode }) {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!fine || reduce) return;
 
+    const embedded =
+      window.self !== window.top &&
+      new URLSearchParams(window.location.search).has("embed");
+
+    if (embedded) {
+      document.documentElement.classList.add("has-cursor-none");
+
+      const post = (type: "move" | "leave", x = 0, y = 0) => {
+        window.parent.postMessage(
+          { source: "portfolio-embed-pointer", type, x, y },
+          "*",
+        );
+      };
+
+      const move = (event: PointerEvent) =>
+        post("move", event.clientX, event.clientY);
+      const leave = () => post("leave");
+
+      window.addEventListener("pointermove", move, { passive: true });
+      window.addEventListener("mouseleave", leave);
+
+      return () => {
+        document.documentElement.classList.remove("has-cursor-none");
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("mouseleave", leave);
+      };
+    }
+
     document.documentElement.classList.add("has-cursor-none");
 
     let targetX = -9999;
