@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { albums } from "@/content/photos";
 import type { Album, Photo } from "@/content/types";
 import { Still } from "./Still";
@@ -16,21 +16,20 @@ type AlbumOverlayProps = {
   onSelectAlbum: (albumId: string) => void;
 };
 
-function GridIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <rect x="3" y="3" width="5" height="5" fill="currentColor" />
-      <rect x="9.5" y="3" width="5" height="5" fill="currentColor" />
-      <rect x="16" y="3" width="5" height="5" fill="currentColor" />
-      <rect x="3" y="9.5" width="5" height="5" fill="currentColor" />
-      <rect x="9.5" y="9.5" width="5" height="5" fill="currentColor" />
-      <rect x="16" y="9.5" width="5" height="5" fill="currentColor" />
-      <rect x="3" y="16" width="5" height="5" fill="currentColor" />
-      <rect x="9.5" y="16" width="5" height="5" fill="currentColor" />
-      <rect x="16" y="16" width="5" height="5" fill="currentColor" />
-    </svg>
-  );
-}
+type DriftSpec = {
+  el: HTMLElement;
+  ampX: number;
+  ampY: number;
+  ampR: number;
+  speedX: number;
+  speedY: number;
+  speedR: number;
+  phaseX: number;
+  phaseY: number;
+  phaseR: number;
+  biasX: number;
+  biasY: number;
+};
 
 function SeriesStack({ album }: { album: Album }) {
   const covers = album.photos.slice(0, 3);
@@ -77,6 +76,10 @@ function resolveOpen(
   return { level: "photos", current: album, active: null };
 }
 
+function displayLabel(value: string) {
+  return value.toLowerCase();
+}
+
 export function AlbumOverlay({
   album,
   initialSlug,
@@ -84,6 +87,7 @@ export function AlbumOverlay({
   onClose,
   onSelectAlbum,
 }: AlbumOverlayProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
   const [level, setLevel] = useState<Level>(
     () => resolveOpen(album, initialSlug).level,
   );
@@ -102,6 +106,75 @@ export function AlbumOverlay({
     setActive(next.active);
     setPanelKey((k) => k + 1);
   }, [album?.id, initialSlug]);
+
+  // Soft wander on overlay labels — same feel as the V-bar rail text.
+  useEffect(() => {
+    if (!open) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (reduce.matches) return;
+
+    let raf = 0;
+    let cancelled = false;
+    let specs: DriftSpec[] = [];
+    let driftStart = 0;
+
+    const collect = () => {
+      const items = Array.from(
+        panel.querySelectorAll<HTMLElement>("[data-album-drift]"),
+      );
+      specs = items.map((el, i) => {
+        const edge = el.dataset.albumDrift;
+        return {
+          el,
+          ampX: 3.2 + (i % 3) * 1.4,
+          ampY: 2.4 + (i % 4) * 1.1,
+          ampR: 0.55 + (i % 3) * 0.28,
+          speedX: 0.00032 + i * 0.00006,
+          speedY: 0.00026 + i * 0.00008,
+          speedR: 0.0002 + i * 0.00005,
+          phaseX: i * 1.73,
+          phaseY: i * 2.41,
+          phaseR: i * 1.19,
+          // Nudge edge labels inward so the full wander stays visible.
+          biasX: edge === "left" ? 1.8 : edge === "right" ? -1.8 : 0,
+          biasY: 0,
+        };
+      });
+      driftStart = performance.now();
+    };
+
+    const tick = (now: number) => {
+      if (cancelled) return;
+      const gain = Math.min(1, Math.max(0, (now - driftStart - 400) / 900));
+      const ease = 1 - Math.pow(1 - gain, 3);
+      for (const s of specs) {
+        const x =
+          (Math.sin(now * s.speedX + s.phaseX) * s.ampX + s.biasX) * ease;
+        const y =
+          (Math.cos(now * s.speedY + s.phaseY) * s.ampY + s.biasY) * ease;
+        const r = Math.sin(now * s.speedR + s.phaseR) * s.ampR * ease;
+        s.el.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) rotate(${r.toFixed(3)}deg)`;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+
+    // Wait a frame so remounted stage labels are in the DOM.
+    raf = requestAnimationFrame(() => {
+      if (cancelled) return;
+      collect();
+      if (!specs.length) return;
+      raf = requestAnimationFrame(tick);
+    });
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      for (const s of specs) s.el.style.transform = "";
+    };
+  }, [open, level, panelKey]);
 
   const goBack = () => {
     if (level === "photo") {
@@ -193,16 +266,16 @@ export function AlbumOverlay({
 
   const title =
     level === "albums"
-      ? "Albums"
+      ? "albums"
       : current
-        ? current.label
-        : "Albums";
+        ? displayLabel(current.label)
+        : "albums";
 
   const subtitle =
     level === "albums"
-      ? "Choose a series"
+      ? ""
       : level === "photo" && active
-        ? `${active.filename} · ${active.year} · ${active.location}${
+        ? `${displayLabel(active.filename)} · ${active.year} · ${displayLabel(active.location)}${
             activeIndex >= 0
               ? ` · ${activeIndex + 1}/${current?.photos.length ?? 0}`
               : ""
@@ -210,6 +283,13 @@ export function AlbumOverlay({
         : current
           ? `${current.photos.length} photographs · choose a photograph`
           : "";
+
+  const backLabel =
+    level === "albums"
+      ? "close"
+      : level === "photos"
+        ? "see all albums"
+        : "see series";
 
   return (
     <div
@@ -229,57 +309,49 @@ export function AlbumOverlay({
         aria-label="Close"
       />
 
-      <div className="album-overlay__panel relative z-10 flex max-h-[min(92svh,920px)] w-full max-w-5xl flex-col gap-4 overflow-hidden text-[#f7f0e4]">
-        <div className="album-overlay__header flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[12px] font-medium uppercase tracking-[0.18em]">
-              {title}
+      <div
+        ref={panelRef}
+        className="album-overlay__panel relative z-10 flex max-h-[min(92svh,920px)] w-full max-w-5xl flex-col gap-4 overflow-visible text-[var(--ink)]"
+      >
+        <div className="album-overlay__header flex items-center justify-between gap-4 px-3">
+          <div className="min-w-0 overflow-visible">
+            <p className="album-overlay__title">
+              <span data-album-drift="left">{title}</span>
             </p>
-            <p className="mt-1 text-[11px] tracking-[0.08em] text-[#f7f0e4]/70">
-              {subtitle}
-            </p>
+            {subtitle ? (
+              <p className="album-overlay__subtitle mt-1">
+                <span data-album-drift="left">{subtitle}</span>
+              </p>
+            ) : null}
           </div>
           <button
             type="button"
             onClick={goBack}
             tabIndex={open ? 0 : -1}
-            className="shrink-0 text-[#f7f0e4] transition-opacity hover:opacity-70"
-            aria-label={
-              level === "photo"
-                ? "Back to series"
-                : level === "photos"
-                  ? "Back to all series"
-                  : "Close"
-            }
+            className="album-overlay__back shrink-0 overflow-visible transition-opacity hover:opacity-70"
+            aria-label={backLabel}
           >
-            {level === "albums" ? (
-              <span className="text-[12px] font-medium uppercase tracking-[0.18em]">
-                Close
-              </span>
-            ) : (
-              <GridIcon />
-            )}
+            <span data-album-drift="right">{backLabel}</span>
           </button>
         </div>
 
-        <div key={panelKey} className="album-overlay__stage flex min-h-0 flex-1 flex-col">
+        <div key={panelKey} className="album-overlay__stage flex min-h-0 flex-1 flex-col overflow-visible">
           {level === "albums" ? (
-            <div className="album-overlay__scroll min-h-0 h-full overflow-y-auto pr-1">
-              <div className="flex flex-wrap items-start justify-center gap-10 md:gap-16">
+            <div className="album-overlay__scroll min-h-0 h-full">
+              <div className="flex flex-wrap items-start justify-center gap-10 px-3 md:gap-16">
                 {albums.map((entry, index) => (
                   <button
                     key={entry.id}
                     type="button"
                     onClick={() => pickAlbum(entry.id)}
                     tabIndex={open ? 0 : -1}
-                    className="album-overlay__item group text-left"
+                    className="album-overlay__item group overflow-visible text-left"
                     style={{ ["--i" as string]: index }}
                     aria-label={`Open ${entry.label}`}
                   >
                     <SeriesStack album={entry} />
-                    <div className="mt-3 flex items-baseline justify-between gap-3 text-[10px] font-medium uppercase tracking-[0.14em]">
-                      <span>{entry.label}</span>
-                      <span>{entry.photos.length}</span>
+                    <div className="album-overlay__caption mt-3 overflow-visible px-1">
+                      <span data-album-drift>{displayLabel(entry.label)}</span>
                     </div>
                   </button>
                 ))}
@@ -288,15 +360,15 @@ export function AlbumOverlay({
           ) : null}
 
           {level === "photos" && current ? (
-            <div className="album-overlay__scroll min-h-0 h-full overflow-y-auto pr-1">
-              <div className="flex flex-wrap items-start justify-center gap-8 md:gap-12">
+            <div className="album-overlay__scroll min-h-0 h-full">
+              <div className="flex flex-wrap items-start justify-center gap-8 px-3 md:gap-12">
                 {current.photos.map((photo, index) => (
                   <button
                     key={photo.slug}
                     type="button"
                     onClick={() => openPhoto(photo)}
                     tabIndex={open ? 0 : -1}
-                    className="album-overlay__item group w-[min(42vw,200px)] shrink-0 text-left md:w-[min(22vw,220px)]"
+                    className="album-overlay__item group w-[min(42vw,200px)] shrink-0 overflow-visible text-left md:w-[min(22vw,220px)]"
                     style={{ ["--i" as string]: index }}
                   >
                     <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#221c16]/80">
@@ -307,9 +379,11 @@ export function AlbumOverlay({
                         reveal={false}
                       />
                     </div>
-                    <div className="mt-2 flex items-baseline justify-between gap-2 text-[10px] font-medium uppercase tracking-[0.14em]">
-                      <span>{photo.filename}</span>
-                      <span>{photo.year}</span>
+                    <div className="album-overlay__caption mt-2 flex items-baseline justify-between gap-2 overflow-visible px-1">
+                      <span data-album-drift>
+                        {displayLabel(photo.filename)}
+                      </span>
+                      <span data-album-drift>{photo.year}</span>
                     </div>
                   </button>
                 ))}

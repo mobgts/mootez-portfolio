@@ -756,7 +756,9 @@ export function DevWork() {
               className={
                 showEmbed
                   ? "project-browser__body project-browser__body--embed"
-                  : "project-browser__body"
+                  : isOpenTab
+                    ? "project-browser__body project-browser__body--say-hi"
+                    : "project-browser__body"
               }
               role="tabpanel"
               aria-label={isOpenTab ? OPEN_TAB_TITLE : project!.title}
