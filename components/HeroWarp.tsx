@@ -19,7 +19,7 @@ type HeroWarpProps = {
 };
 
 /** Bump when fragment logic changes so the WebGL program recompiles on HMR. */
-const WARP_SHADER_REV = 6;
+const WARP_SHADER_REV = 7;
 
 /** Layout + visual viewport — mobile chrome must never undersize the field. */
 function viewportBox() {
@@ -33,6 +33,14 @@ function viewportBox() {
     Math.round(Math.max(window.innerHeight, vv?.height ?? 0)),
   );
   return { w, h };
+}
+
+/** Touch / narrow devices: fewer pixels + cheaper field reads so scroll stays fluid. */
+function isLiteField() {
+  return (
+    window.matchMedia("(pointer: coarse)").matches ||
+    window.matchMedia("(max-width: 767px)").matches
+  );
 }
 
 const VERTEX = `
@@ -72,6 +80,7 @@ uniform float uRadius;
 uniform float uTime;
 uniform float uMotion;
 uniform float uTint;
+uniform float uLite;
 uniform sampler2D uPhoto;
 uniform sampler2D uFlow;
 uniform sampler2D uBleed;
@@ -96,15 +105,16 @@ vec2 silkUv(float x, float pageY) {
   return vec2(x, abs(fract((pageY / tileH) * 0.5) * 2.0 - 1.0));
 }
 
-// Light soft read so ridge lighting eases instead of stepping.
-// dy scales with tile period so soft samples still catch ridges on mobile.
+// Soft 5-tap on desktop; single fetch on narrow (uLite) so phones keep scroll headroom.
 vec4 flowSample(float x, float pageY) {
+  vec4 c = texture2D(uFlow, silkUv(x, pageY));
+  if (uLite > 0.5) return c;
   float base = max(uRes.x, 640.0);
   float narrow = 1.0 - smoothstep(640.0, 960.0, uRes.x);
   float tileH = mix(base, max(base, uViewH * 2.05), narrow);
   float dx = 1.25 / max(uRes.x, 1.0);
   float dy = 1.25 * clamp(tileH / max(uViewH, 1.0), 0.85, 2.4);
-  vec4 c = texture2D(uFlow, silkUv(x, pageY)) * 0.4;
+  c *= 0.4;
   c += texture2D(uFlow, silkUv(x + dx, pageY)) * 0.15;
   c += texture2D(uFlow, silkUv(x - dx, pageY)) * 0.15;
   c += texture2D(uFlow, silkUv(x, pageY + dy)) * 0.15;
@@ -213,10 +223,9 @@ void main() {
   float paperBright = smoothstep(0.58, 0.9, paperLum);
   float tintLive = smoothstep(0.03, 0.55, uTint);
   float narrowScreen = 1.0 - smoothstep(640.0, 960.0, uRes.x);
-  // Keep fold contrast on phone; ease motion a touch vs desktop (not muted).
+  // Keep fold look identical to desktop; only ease motion a touch on phone.
   float silkGain = mix(0.06, 1.0, tintLive) * mix(1.0, 0.45, paperBright * (1.0 - tintLive));
   float liftGain = mix(0.08, 1.0, tintLive) * mix(1.0, 0.28, paperBright * (1.0 - tintLive));
-  liftGain *= mix(1.0, 1.15, narrowScreen);
   float shadeGain = mix(0.35, 1.0, tintLive) * mix(1.0, 1.15, paperBright);
   float motionAmt = uMotion * mix(1.0, 0.72, narrowScreen);
 
@@ -299,68 +308,9 @@ void main() {
   float drag = wake * speed;
 
   // Rough photo UV before warp — used to mask body/arm without fighting the face.
-  vec2 preUv = vec2(sampleX, sampleY);
-  float faceKeep = 1.0 - smoothstep(
-    0.08,
-    0.22,
-    length((preUv - vec2(0.50, 0.44)) * vec2(1.2, 1.55))
-  );
-  // Left arm on the boat rim (viewer left). Face stays locked.
-  float armDown = 1.0 - smoothstep(0.08, 0.42, preUv.y);
-  float leftArm = (1.0 - smoothstep(0.12, 0.48, preUv.x))
-                * smoothstep(0.28, 0.48, preUv.y)
-                * (1.0 - smoothstep(0.62, 0.82, preUv.y))
-                * (1.0 - faceKeep);
-  // Stronger further down the arm; quiet at the shoulder.
-  leftArm *= mix(0.25, 1.4, armDown);
-  float armPulse = (0.55 + 0.65 * abs(ripple) + 0.85 * leadBead) * motionAmt;
-
-  // The swell drags the portrait along its folds; the cursor adds a tighter pull,
-  // shearing the cloth forward ahead of the sweep and back behind it.
-  // Arm also rides the swell even where the fold map is thin over the body.
-  // Kept mild on the face so the embed stays clear.
-  float amp = (0.003 * fall * (1.0 + 1.3 * speed) + 0.004 * ripple * faceProtect + 0.006 * leadBead * faceProtect) * lineStrength;
-  amp += (0.016 * ripple + 0.022 * leadBead) * leftArm * armPulse;
-  amp *= mix(1.0, 0.35, paperBright * (1.0 - tintLive));
-  amp *= mix(0.4, 1.0, tintLive);
-  vec2 push = tangent * 0.35 + perp * (ridge * 0.55) + sweepDir * drag * 1.1;
-  // Soft vertical sway on the arm so it reads as cloth-drag, not a hard shear.
-  push += vec2(-0.22, 1.15) * leftArm * armPulse;
-  vec2 uvDelta = vec2(push.x / aspect, push.y) * amp / fit;
-
-  vec2 frameUv = preUv;
-  vec2 guard = smoothstep(vec2(0.0), vec2(0.04), frameUv)
-             * smoothstep(vec2(0.0), vec2(0.04), 1.0 - frameUv);
-  vec2 sampleUv = clamp(frameUv + uvDelta * min(guard.x, guard.y), 0.0, 1.0);
-  sampleUv = mix(sampleUv, vec2(sampleUv.x, 0.02), step(portraitH, localY) + step(localY, 0.0));
-
-  // Soft vertical motion smear — stronger on the arm; face stays crisp.
-  float smearAmt = mix(0.12, 0.75, clamp(leftArm * armPulse, 0.0, 1.0)) * (0.35 + 0.65 * faceProtect);
-  vec2 mDir = vec2(0.0025, 0.014) * mix(1.0, 2.6, clamp(leftArm * armPulse, 0.0, 1.0));
-  vec3 sharp = texture2D(uPhoto, sampleUv).rgb;
-  vec3 smear = sharp * 0.30;
-  smear += texture2D(uPhoto, clamp(sampleUv + mDir * 0.4, 0.0, 1.0)).rgb * 0.18;
-  smear += texture2D(uPhoto, clamp(sampleUv - mDir * 0.4, 0.0, 1.0)).rgb * 0.18;
-  smear += texture2D(uPhoto, clamp(sampleUv + mDir * 0.8, 0.0, 1.0)).rgb * 0.12;
-  smear += texture2D(uPhoto, clamp(sampleUv - mDir * 0.8, 0.0, 1.0)).rgb * 0.12;
-  smear += texture2D(uPhoto, clamp(sampleUv + mDir, 0.0, 1.0)).rgb * 0.05;
-  smear += texture2D(uPhoto, clamp(sampleUv - mDir, 0.0, 1.0)).rgb * 0.05;
-  vec3 sharpRaw = mix(sharp, smear, smearAmt);
-  vec3 hazeRaw = fuzzSample(sampleUv + tangent * fuzz * 0.015, 0.004 + fuzz * 0.045);
-  vec3 raw = mix(sharpRaw, hazeRaw, smoothstep(0.15, 0.9, fuzz) * 0.72);
-
-  float lineMask = 0.45 + 0.55 * lineStrength;
-  float reveal = clamp(fall * 1.25 * lineMask, 0.0, 1.0);
-
-  float grey = dot(raw, LUMA);
-  float print = clamp((grey - 0.5) * 1.12 + 0.54, 0.0, 1.0);
-  // Duotone onto the live paper; skip the near-white highlight on cream.
-  vec3 inkShadow = uWash * mix(0.55, 0.72, paperBright);
-  vec3 inkHighlight = mix(uPaper, mix(uWash, uPaper, 0.65), mix(0.34, 0.12, paperBright));
-  vec3 bw = mix(inkShadow, inkHighlight, print);
-  vec3 saturated = clamp((raw - vec3(grey)) * 1.4 + vec3(grey), 0.0, 1.0);
-  saturated = mix(saturated, saturated * mix(uPaper / max(dot(uPaper, LUMA), 0.001), vec3(1.0), 0.5), 0.18);
-  vec3 photo = mix(bw, saturated, reveal);
+  // Portrait embed is off (aboutOn=0 / hold=0): skip the heavy photo/mask path so
+  // phones are not sampling four textures for a mix that never shows.
+  float reveal = clamp(fall * 1.25 * (0.45 + 0.55 * lineStrength), 0.0, 1.0);
 
   // Broaden the bands so each fold reads as a thick sweep of cloth rather than
   // a thin line. Slightly softer curve so ridges ease into the paper.
@@ -368,9 +318,7 @@ void main() {
   float fold = ridgeWide * lineStrength;
   float sheen = max(0.0, ridgeWide) * lineStrength * liftGain;
   float trough = max(0.0, -ridgeWide) * lineStrength;
-
-  // Face almost silk-free so the embedded still stays clear.
-  float portraitSilk = mix(0.04, 1.0, max(faceProtect, clamp(leftArm, 0.0, 1.0) * 0.55));
+  float portraitSilk = 1.0;
 
   // What the hand does to the light. Shadow gathers in the cloth behind it, which
   // is still dropping back, and deepest where that cloth was already a trough; the
@@ -394,77 +342,113 @@ void main() {
   float underPortrait = 0.0;
   float landingSilk = 1.0 + landing * 1.45 * besideName + underPortrait;
 
-  // Gentle silk around the figure — face stays readable.
-  vec3 portrait = photo;
-  portrait = clamp((portrait - 0.5) * 1.06 + 0.52, 0.0, 1.0);
-  float foldLift = mix(0.45, 0.18, paperBright);
-  portrait *= clamp(1.0 + fold * foldLift * portraitSilk * landingSilk, 0.4, mix(1.7, 1.25, paperBright));
-  portrait *= clamp(1.0 - trough * mix(0.38, 0.48, paperBright) * portraitSilk * landingSilk, 0.4, 1.0);
-  portrait += pow(sheen, 1.4) * (0.12 + 0.08 * fall) * portraitSilk * landingSilk * liftGain;
-  portrait *= 1.0 + crest * 0.08 * portraitSilk * liftGain;
-  portrait *= 1.0 + leadCrest * 0.12 * portraitSilk * liftGain;
-  portrait *= 1.0 - 0.06 * fuzz * fuzz;
-  portrait *= 1.0 - 0.04 * length((heroP - 0.5) * vec2(heroAspect, 1.0));
+  vec3 portrait = uPaper;
+  float figure = 0.0;
+  float band = 0.0;
 
-  // Inverted colour block on the sunglasses (photo UV) — full solid stamp.
-  vec2 eyeC = vec2(0.50, 0.435);
-  float eyeL = 0.075;
-  float eyeR = 0.075;
-  float eyeT = 0.035;
-  float eyeB = 0.035;
-  float eyeMask =
-    step(eyeC.x - eyeL, sampleUv.x) * step(sampleUv.x, eyeC.x + eyeR) *
-    step(eyeC.y - eyeB, sampleUv.y) * step(sampleUv.y, eyeC.y + eyeT);
-  vec3 eyeInv = 1.0 - portrait;
-  eyeInv = mix(eyeInv, eyeInv * vec3(0.82, 0.76, 1.08) + vec3(0.06, 0.04, 0.12), 0.45);
-  portrait = mix(portrait, eyeInv, eyeMask);
+  if (aboutOn > 0.001) {
+    vec2 preUv = vec2(sampleX, sampleY);
+    float faceKeep = 1.0 - smoothstep(
+      0.08,
+      0.22,
+      length((preUv - vec2(0.50, 0.44)) * vec2(1.2, 1.55))
+    );
+    float armDown = 1.0 - smoothstep(0.08, 0.42, preUv.y);
+    float leftArm = (1.0 - smoothstep(0.12, 0.48, preUv.x))
+                  * smoothstep(0.28, 0.48, preUv.y)
+                  * (1.0 - smoothstep(0.62, 0.82, preUv.y))
+                  * (1.0 - faceKeep);
+    leftArm *= mix(0.25, 1.4, armDown);
+    float armPulse = (0.55 + 0.65 * abs(ripple) + 0.85 * leadBead) * motionAmt;
 
-  // Alpha cutout of the figure. The edge is found by moving the alpha threshold
-  // around with smooth noise and the fold under it, so the silhouette bleeds into
-  // the cloth along the drape. Punching holes in the alpha directly reads as dirt.
-  float inFrame = min(guard.x, guard.y);
+    float amp = (0.003 * fall * (1.0 + 1.3 * speed) + 0.004 * ripple * faceProtect + 0.006 * leadBead * faceProtect) * lineStrength;
+    amp += (0.016 * ripple + 0.022 * leadBead) * leftArm * armPulse;
+    amp *= mix(1.0, 0.35, paperBright * (1.0 - tintLive));
+    amp *= mix(0.4, 1.0, tintLive);
+    vec2 push = tangent * 0.35 + perp * (ridge * 0.55) + sweepDir * drag * 1.1;
+    push += vec2(-0.22, 1.15) * leftArm * armPulse;
+    vec2 uvDelta = vec2(push.x / aspect, push.y) * amp / fit;
 
-  // Noise anchored in photo space, so it travels with the figure rather than
-  // crawling over it. It pushes where the mask is read from, which is what makes
-  // the outline wander like a wet edge instead of staying a cut line.
-  vec2 wob = vec2(
-    fbm2(sampleUv * vec2(13.0, 16.0)),
-    fbm2(sampleUv * vec2(13.0, 16.0) + 31.7)
-  ) - 0.5;
-  vec2 maskUv = clamp(sampleUv + wob * 0.022 * aboutOn, 0.0, 1.0);
+    vec2 frameUv = preUv;
+    vec2 guard = smoothstep(vec2(0.0), vec2(0.04), frameUv)
+               * smoothstep(vec2(0.0), vec2(0.04), 1.0 - frameUv);
+    vec2 sampleUv = clamp(frameUv + uvDelta * min(guard.x, guard.y), 0.0, 1.0);
+    sampleUv = mix(sampleUv, vec2(sampleUv.x, 0.02), step(portraitH, localY) + step(localY, 0.0));
 
-  // The cutout is near-binary, so blur it into a ramp first — a threshold has to
-  // have a gradient to bite into or the edge stays hard however it is moved.
-  float mr = mix(0.0015, 0.009, aboutOn);
-  float maskA = texture2D(uMask, maskUv).a * 0.32;
-  maskA += texture2D(uMask, clamp(maskUv + vec2(mr, 0.0), 0.0, 1.0)).a * 0.17;
-  maskA += texture2D(uMask, clamp(maskUv - vec2(mr, 0.0), 0.0, 1.0)).a * 0.17;
-  maskA += texture2D(uMask, clamp(maskUv + vec2(0.0, mr * 1.5), 0.0, 1.0)).a * 0.17;
-  maskA += texture2D(uMask, clamp(maskUv - vec2(0.0, mr * 1.5), 0.0, 1.0)).a * 0.17;
+    float smearAmt = mix(0.12, 0.75, clamp(leftArm * armPulse, 0.0, 1.0)) * (0.35 + 0.65 * faceProtect);
+    vec2 mDir = vec2(0.0025, 0.014) * mix(1.0, 2.6, clamp(leftArm * armPulse, 0.0, 1.0));
+    vec3 sharp = texture2D(uPhoto, sampleUv).rgb;
+    vec3 smear = sharp * 0.30;
+    smear += texture2D(uPhoto, clamp(sampleUv + mDir * 0.4, 0.0, 1.0)).rgb * 0.18;
+    smear += texture2D(uPhoto, clamp(sampleUv - mDir * 0.4, 0.0, 1.0)).rgb * 0.18;
+    smear += texture2D(uPhoto, clamp(sampleUv + mDir * 0.8, 0.0, 1.0)).rgb * 0.12;
+    smear += texture2D(uPhoto, clamp(sampleUv - mDir * 0.8, 0.0, 1.0)).rgb * 0.12;
+    smear += texture2D(uPhoto, clamp(sampleUv + mDir, 0.0, 1.0)).rgb * 0.05;
+    smear += texture2D(uPhoto, clamp(sampleUv - mDir, 0.0, 1.0)).rgb * 0.05;
+    vec3 sharpRaw = mix(sharp, smear, smearAmt);
+    vec3 hazeRaw = fuzzSample(sampleUv + tangent * fuzz * 0.015, 0.004 + fuzz * 0.045);
+    vec3 raw = mix(sharpRaw, hazeRaw, smoothstep(0.15, 0.9, fuzz) * 0.72);
 
-  // Fold under the pixel decides where the print gives out, so the silhouette
-  // dissolves along the drape.
-  float thresh = 0.42 - (fold * 0.08 + sheen * 0.05) * aboutOn;
-  float feather = mix(0.05, 0.26, aboutOn);
-  float figure = smoothstep(thresh - feather, thresh + feather, maskA);
+    float grey = dot(raw, LUMA);
+    float print = clamp((grey - 0.5) * 1.12 + 0.54, 0.0, 1.0);
+    vec3 inkShadow = uWash * mix(0.55, 0.72, paperBright);
+    vec3 inkHighlight = mix(uPaper, mix(uWash, uPaper, 0.65), mix(0.34, 0.12, paperBright));
+    vec3 bw = mix(inkShadow, inkHighlight, print);
+    vec3 saturated = clamp((raw - vec3(grey)) * 1.4 + vec3(grey), 0.0, 1.0);
+    saturated = mix(saturated, saturated * mix(uPaper / max(dot(uPaper, LUMA), 0.001), vec3(1.0), 0.5), 0.18);
+    vec3 photo = mix(bw, saturated, reveal);
 
-  // Fine dither confined to the transition: nothing in the core, nothing outside.
-  float band = figure * (1.0 - figure) * 4.0;
-  float fineGrain = fbm2(sampleUv * vec2(150.0, 180.0)) - 0.5;
-  figure = clamp(figure + fineGrain * 0.22 * band * aboutOn, 0.0, 1.0);
+    portraitSilk = mix(0.04, 1.0, max(faceProtect, clamp(leftArm, 0.0, 1.0) * 0.55));
+    portrait = photo;
+    portrait = clamp((portrait - 0.5) * 1.06 + 0.52, 0.0, 1.0);
+    float foldLift = mix(0.45, 0.18, paperBright);
+    portrait *= clamp(1.0 + fold * foldLift * portraitSilk * landingSilk, 0.4, mix(1.7, 1.25, paperBright));
+    portrait *= clamp(1.0 - trough * mix(0.38, 0.48, paperBright) * portraitSilk * landingSilk, 0.4, 1.0);
+    portrait += pow(sheen, 1.4) * (0.12 + 0.08 * fall) * portraitSilk * landingSilk * liftGain;
+    portrait *= 1.0 + crest * 0.08 * portraitSilk * liftGain;
+    portrait *= 1.0 + leadCrest * 0.12 * portraitSilk * liftGain;
+    portrait *= 1.0 - 0.06 * fuzz * fuzz;
+    portrait *= 1.0 - 0.04 * length((heroP - 0.5) * vec2(heroAspect, 1.0));
 
-  figure = max(figure, eyeMask) * inFrame;
+    vec2 eyeC = vec2(0.50, 0.435);
+    float eyeMask =
+      step(eyeC.x - 0.075, sampleUv.x) * step(sampleUv.x, eyeC.x + 0.075) *
+      step(eyeC.y - 0.035, sampleUv.y) * step(sampleUv.y, eyeC.y + 0.035);
+    vec3 eyeInv = 1.0 - portrait;
+    eyeInv = mix(eyeInv, eyeInv * vec3(0.82, 0.76, 1.08) + vec3(0.06, 0.04, 0.12), 0.45);
+    portrait = mix(portrait, eyeInv, eyeMask);
+
+    float inFrame = min(guard.x, guard.y);
+    vec2 wob = vec2(
+      fbm2(sampleUv * vec2(13.0, 16.0)),
+      fbm2(sampleUv * vec2(13.0, 16.0) + 31.7)
+    ) - 0.5;
+    vec2 maskUv = clamp(sampleUv + wob * 0.022 * aboutOn, 0.0, 1.0);
+    float mr = mix(0.0015, 0.009, aboutOn);
+    float maskA = texture2D(uMask, maskUv).a * 0.32;
+    maskA += texture2D(uMask, clamp(maskUv + vec2(mr, 0.0), 0.0, 1.0)).a * 0.17;
+    maskA += texture2D(uMask, clamp(maskUv - vec2(mr, 0.0), 0.0, 1.0)).a * 0.17;
+    maskA += texture2D(uMask, clamp(maskUv + vec2(0.0, mr * 1.5), 0.0, 1.0)).a * 0.17;
+    maskA += texture2D(uMask, clamp(maskUv - vec2(0.0, mr * 1.5), 0.0, 1.0)).a * 0.17;
+    float thresh = 0.42 - (fold * 0.08 + sheen * 0.05) * aboutOn;
+    float feather = mix(0.05, 0.26, aboutOn);
+    figure = smoothstep(thresh - feather, thresh + feather, maskA);
+    band = figure * (1.0 - figure) * 4.0;
+    float fineGrain = fbm2(sampleUv * vec2(150.0, 180.0)) - 0.5;
+    figure = clamp(figure + fineGrain * 0.22 * band * aboutOn, 0.0, 1.0);
+    figure = max(figure, eyeMask) * inFrame;
+  }
 
   // Scroll-graded field: flat on cream; folds only once tint has colour.
-  // Narrow screens get stronger ridge/trough so cloth shape survives without a cursor.
-  vec3 fieldCol = mix(uPaper, uWash, (mix(0.02, mix(0.12, 0.18, narrowScreen), tintLive) + mix(0.11, 0.16, narrowScreen) * trough * tintLive));
-  float fieldFold = mix(0.04, mix(0.22, 0.34, narrowScreen), tintLive) * mix(1.0, 0.45, paperBright * (1.0 - tintLive));
-  fieldCol *= clamp(1.0 + fold * fieldFold * landingSilk, 0.55, mix(1.08, mix(1.35, 1.48, narrowScreen), tintLive));
-  fieldCol *= clamp(1.0 - trough * mix(0.06, mix(0.22, 0.32, narrowScreen), tintLive) * landingSilk, 0.55, 1.0);
-  fieldCol *= 1.0 + crest * mix(0.14, 0.13, narrowScreen) * liftGain;
-  fieldCol *= 1.0 + leadCrest * mix(0.26, 0.22, narrowScreen) * liftGain;
-  fieldCol += sheen * mix(0.03, 0.045, narrowScreen) * landingSilk * tintLive;
-  fieldCol += leadBead * lineStrength * mix(0.045, 0.038, narrowScreen) * liftGain;
+  // Same grade on phone and desktop — narrow only softens motion, not colour.
+  vec3 fieldCol = mix(uPaper, uWash, (mix(0.02, 0.12, tintLive) + 0.11 * trough * tintLive));
+  float fieldFold = mix(0.04, 0.22, tintLive) * mix(1.0, 0.45, paperBright * (1.0 - tintLive));
+  fieldCol *= clamp(1.0 + fold * fieldFold * landingSilk, 0.55, mix(1.08, 1.35, tintLive));
+  fieldCol *= clamp(1.0 - trough * mix(0.06, 0.22, tintLive) * landingSilk, 0.55, 1.0);
+  fieldCol *= 1.0 + crest * 0.14 * liftGain;
+  fieldCol *= 1.0 + leadCrest * 0.26 * liftGain;
+  fieldCol += sheen * 0.03 * landingSilk * tintLive;
+  fieldCol += leadBead * lineStrength * 0.045 * liftGain;
   // Soft wash lift on the cursor reveal — never toward chalk white on cream.
   vec3 litTarget = mix(uPaper, mix(uWash, mix(uWash, uPaper, 0.55), paperBright), tintLive);
   vec3 lit = mix(fieldCol, litTarget, mix(0.12, 0.4, tintLive));
@@ -574,8 +558,8 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
     portraitH: 1,
   });
   const tintRef = useRef({
-    paper: [245 / 255, 240 / 255, 230 / 255] as [number, number, number],
-    wash: [242 / 255, 237 / 255, 228 / 255] as [number, number, number],
+    paper: [187 / 255, 191 / 255, 120 / 255] as [number, number, number],
+    wash: [154 / 255, 156 / 255, 85 / 255] as [number, number, number],
   });
   const reduceMotionRef = useRef(false);
   const silkRef = useRef(getVibe().silk);
@@ -682,7 +666,8 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
       antialias: false,
       depth: false,
       stencil: false,
-      powerPreference: "low-power",
+      powerPreference: isLiteField() ? "high-performance" : "low-power",
+      desynchronized: true,
     });
     if (!gl) {
       setMode("fallback");
@@ -728,6 +713,7 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
       time: gl.getUniformLocation(program, "uTime"),
       motion: gl.getUniformLocation(program, "uMotion"),
       tint: gl.getUniformLocation(program, "uTint"),
+      lite: gl.getUniformLocation(program, "uLite"),
       photo: gl.getUniformLocation(program, "uPhoto"),
       flow: gl.getUniformLocation(program, "uFlow"),
       bleed: gl.getUniformLocation(program, "uBleed"),
@@ -745,7 +731,9 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
     let height = 0;
 
     const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const lite = isLiteField();
+      // Phones: stay near 1× so scroll compositing is not fighting a 2× silk buffer.
+      const dpr = Math.min(window.devicePixelRatio || 1, lite ? 1.15 : 2);
       const box = viewportBox();
       // Prefer the live wrap box when CSS dvh has settled; never go smaller than VV.
       width = Math.max(1, Math.round(Math.max(box.w, wrap.clientWidth || 0)));
@@ -817,10 +805,17 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
         let smoothTint = tintColorRef.current;
         let animTime = 0;
         let lastNow = performance.now();
+        let lastDraw = 0;
+        const lite = isLiteField();
+        // ~30fps silk on phones leaves the compositor free for touch scroll.
+        const minFrameMs = lite ? 32 : 0;
 
         const tick = () => {
           if (disposed) return;
+          raf = requestAnimationFrame(tick);
           const now = performance.now();
+          if (minFrameMs > 0 && now - lastDraw < minFrameMs) return;
+          lastDraw = now;
           const dt = Math.min(0.05, (now - lastNow) / 1000);
           lastNow = now;
           animTime += dt * (reduceMotionRef.current
@@ -924,9 +919,8 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
           gl.uniform1f(u.time, animTime);
           gl.uniform1f(u.motion, smoothMotion);
           gl.uniform1f(u.tint, smoothTint);
+          gl.uniform1f(u.lite, lite ? 1 : 0);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-          raf = requestAnimationFrame(tick);
         };
 
         raf = requestAnimationFrame(tick);

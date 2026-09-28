@@ -39,6 +39,51 @@ function smoothstep(t: number) {
   return x * x * (3 - 2 * x);
 }
 
+/** Document tops for tint stops — refreshed on layout, reused on scroll. */
+const topCache = new Map<string, number>();
+let topsDirty = true;
+
+export function invalidateTintTops() {
+  topsDirty = true;
+}
+
+function ensureTintTops(stops: TintStop[]) {
+  if (typeof document === "undefined") return;
+  if (!topsDirty) return;
+  const scrollY = window.scrollY;
+  let found = 0;
+  for (const stop of stops) {
+    const el = document.getElementById(stop.id);
+    if (!el) {
+      topCache.delete(stop.id);
+      continue;
+    }
+    topCache.set(stop.id, el.getBoundingClientRect().top + scrollY);
+    found += 1;
+  }
+  // Stay dirty until sections exist (avoids locking empty tops before hydrate).
+  if (found > 0) topsDirty = false;
+}
+
+/** Call once from PageTint / HeroWarp so resize keeps the cache honest. */
+export function bindTintTopInvalidation() {
+  if (typeof window === "undefined") return () => {};
+  const dirty = () => {
+    topsDirty = true;
+  };
+  window.addEventListener("resize", dirty);
+  const vv = window.visualViewport;
+  vv?.addEventListener("resize", dirty);
+  const ro = new ResizeObserver(dirty);
+  ro.observe(document.documentElement);
+  if (document.body) ro.observe(document.body);
+  return () => {
+    window.removeEventListener("resize", dirty);
+    vv?.removeEventListener("resize", dirty);
+    ro.disconnect();
+  };
+}
+
 export function sampleTintAt(
   scrollY: number,
   viewH: number,
@@ -49,14 +94,15 @@ export function sampleTintAt(
   // Wide falloff — on short mobile sections keep the grade soft across ~a viewport+.
   const radius = Math.max(320, viewH * (viewH < 780 ? 1.15 : 0.9));
 
+  ensureTintTops(stops);
+
   const points = stops
     .map((stop, index) => {
-      const el =
-        typeof document !== "undefined" ? document.getElementById(stop.id) : null;
-      const top = el
-        ? el.getBoundingClientRect().top + window.scrollY
-        : 1e9 + index;
-      return { ...stop, top };
+      const top = topCache.get(stop.id);
+      return {
+        ...stop,
+        top: top === undefined ? 1e9 + index : top,
+      };
     })
     .filter((p) => p.top < 1e9)
     .sort((a, b) => a.top - b.top);

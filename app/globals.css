@@ -1,20 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  --paper: #f5f0e6;
-  --wash: #f2ede4;
+  /* Seeded to vibe default (tint notch 4/6) so first paint matches desktop. */
+  --paper: #bbbf78;
+  --wash: #9a9c55;
   --ink: #221c16;
-  --muted: #76746e;
-  --lavender: #585650;
-  --lavender-deep: #302e2a;
-  --cream: #faf6f0;
-  --olive: #78766e;
-  --olive-deep: #484640;
+  --muted: #6d6f53;
+  --lavender: #999357;
+  --lavender-deep: #686233;
+  --cream: #dbdbb3;
+  --olive: #8f9250;
+  --olive-deep: #5b5c2f;
   --sage: #9aa78c;
-  --tint-wash: rgb(242 237 228 / 0.12);
-  --tint-nav: rgb(245 240 230 / 0.92);
-  --cursor-glow: 88 86 80;
-  --staple-hue: 18deg;
+  --tint-wash: rgb(154 156 85 / 0.28);
+  --tint-nav: rgb(187 191 120 / 0.92);
+  --cursor-glow: 143 146 80;
+  --staple-hue: 116deg;
 }
 
 @theme inline {
@@ -35,6 +36,13 @@ html {
   scroll-behavior: smooth;
   background-color: var(--paper);
   overscroll-behavior-y: none;
+}
+
+@media (pointer: coarse) {
+  html {
+    /* Native touch momentum — CSS smooth-scroll fights finger scrolling. */
+    scroll-behavior: auto;
+  }
 }
 
 body {

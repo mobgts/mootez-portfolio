@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { mixRgb } from "@/content/tints";
+import { bindTintTopInvalidation, mixRgb } from "@/content/tints";
 import {
-  CREAM_TINT_STOPS,
   getVibe,
   mapVibeColor,
   sampleVibeTintAt,
@@ -20,13 +19,17 @@ const INK_LIGHT: [number, number, number] = [247, 246, 242];
 const CREAM_LIFT: [number, number, number] = [250, 246, 238];
 const LERP = 0.14;
 
+/** Matches vibe default colour=0.6 at scroll top — same as :root. */
+const DEFAULT_PAPER: [number, number, number] = [187, 191, 120];
+const DEFAULT_WASH: [number, number, number] = [154, 156, 85];
+
 export function PageTint() {
   useEffect(() => {
     const root = document.documentElement;
     let raf = 0;
     let current = {
-      paper: [...CREAM_TINT_STOPS[0].paper] as [number, number, number],
-      wash: [...CREAM_TINT_STOPS[0].wash] as [number, number, number],
+      paper: [...DEFAULT_PAPER] as [number, number, number],
+      wash: [...DEFAULT_WASH] as [number, number, number],
     };
     let target = { ...current };
     let warmth = getVibe().color;
@@ -110,12 +113,29 @@ export function PageTint() {
 
     const onScroll = () => readStops();
     readStops();
+    // Jump to the live default on the first frame so phone doesn't flash cream CSS
+    // then lerp into olive.
+    current = {
+      paper: [...target.paper] as [number, number, number],
+      wash: [...target.wash] as [number, number, number],
+    };
+    const seedNow = vibeAccents(warmth);
+    accent = {
+      accent: [...seedNow.accent] as [number, number, number],
+      accentDeep: [...seedNow.accentDeep] as [number, number, number],
+      olive: [...seedNow.olive] as [number, number, number],
+      oliveDeep: [...seedNow.oliveDeep] as [number, number, number],
+      muted: [...seedNow.muted] as [number, number, number],
+      stapleHue: seedNow.stapleHue,
+      ink: [...INK_DARK] as [number, number, number],
+    };
     raf = requestAnimationFrame(paint);
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
     const vv = window.visualViewport;
     vv?.addEventListener("resize", onScroll);
     const unsub = subscribeVibe(() => readStops());
+    const unbindTops = bindTintTopInvalidation();
 
     return () => {
       cancelAnimationFrame(raf);
@@ -123,6 +143,7 @@ export function PageTint() {
       window.removeEventListener("resize", onScroll);
       vv?.removeEventListener("resize", onScroll);
       unsub();
+      unbindTops();
     };
   }, []);
 
