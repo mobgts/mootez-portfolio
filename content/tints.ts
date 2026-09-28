@@ -9,12 +9,12 @@ export type TintSample = {
   wash: [number, number, number];
 };
 
-// Studio olive — held soft through the story so scroll never snaps.
+// Studio olive — gentle monotonic grade so mobile scroll never snaps back.
 export const TINT_STOPS: TintStop[] = [
   { id: "top", paper: [182, 187, 111], wash: [147, 149, 73] },
-  { id: "about", paper: [182, 187, 111], wash: [147, 149, 73] },
-  { id: "sound", paper: [152, 164, 88], wash: [118, 128, 56] },
-  { id: "dev", paper: [172, 170, 108], wash: [140, 138, 74] },
+  { id: "sound", paper: [172, 180, 104], wash: [136, 142, 64] },
+  { id: "dev", paper: [178, 176, 112], wash: [144, 142, 78] },
+  { id: "about", paper: [190, 182, 124], wash: [156, 148, 92] },
   { id: "contact", paper: [210, 194, 148], wash: [180, 164, 118] },
 ];
 
@@ -46,8 +46,8 @@ export function sampleTintAt(
 ): TintSample {
   // Sample a touch above mid-viewport so the next stop arrives with the section.
   const y = scrollY + viewH * 0.34;
-  // Wide falloff so short sections (image) still crossfade over ~a viewport.
-  const radius = Math.max(280, viewH * 0.9);
+  // Wide falloff — on short mobile sections keep the grade soft across ~a viewport+.
+  const radius = Math.max(320, viewH * (viewH < 780 ? 1.15 : 0.9));
 
   const points = stops
     .map((stop, index) => {

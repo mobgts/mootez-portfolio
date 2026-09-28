@@ -6,54 +6,125 @@ import { openAlbumDirect } from "@/content/albumUi";
 import { getAlbum } from "@/content/photos";
 import { SilkArrive, useSilkDrive } from "./AboutSilk";
 
-type CollageFit = {
-  /** How many singles each row can show (1–3). */
+/** Desktop collage metrics — source of truth. Everything else scales from these. */
+const DESKTOP = {
+  seriesW: 380,
+  seriesH: 510,
+  seriesWLarge: 450,
+  seriesHLarge: 600,
+  cardW: 200,
+  cardH: 270,
+  cardWLarge: 238,
+  cardHLarge: 320,
+  singleW: 238,
+  singleH: 320,
+  singleWLarge: 282,
+  singleHLarge: 380,
+  offset: 58,
+  offsetLarge: 68,
+  rowGap: 20,
+  singleGap: 80,
+  colGap: 16,
+  rowPull: 80,
+  singlePt: 20,
+} as const;
+
+type MeasuredFit = {
   singles: number;
-  /** Bump still sizes when the row is sparse. */
   large: boolean;
+  scale: number;
 };
 
-const FIT_FULL: CollageFit = { singles: 3, large: false };
+type CollageFit = MeasuredFit & {
+  /** Desktop only — 10% inset. Mobile centers with CSS. */
+  left: number | null;
+};
 
-/** Measure how many singles fit beside a series stack in the available width. */
-function measureFit(available: number, md: boolean): CollageFit {
-  const series = md ? 380 : 310;
-  const rowGap = md ? 20 : 16;
-  const singleGap = md ? 80 : 56;
+const FIT_SAFE: CollageFit = { singles: 1, large: false, scale: 0.55, left: null };
 
-  const tryFit = (n: number, single: number) => {
-    const gaps = Math.max(0, n - 1) * singleGap;
-    return series + rowGap + n * single + gaps <= available;
-  };
+function rowWidth(singles: number, large: boolean) {
+  const series = large ? DESKTOP.seriesWLarge : DESKTOP.seriesW;
+  const single = large ? DESKTOP.singleWLarge : DESKTOP.singleW;
+  return (
+    series +
+    DESKTOP.rowGap +
+    singles * single +
+    Math.max(0, singles - 1) * DESKTOP.singleGap
+  );
+}
 
-  // Prefer more images at base size; if only one fits, grow it.
-  const baseSingle = md ? 238 : 194;
-  const largeSingle = md ? 282 : 224;
+function rowHeight(large: boolean) {
+  const series = large ? DESKTOP.seriesHLarge : DESKTOP.seriesH;
+  // Two rows with the same pull / column gap as desktop.
+  return series + DESKTOP.colGap - DESKTOP.rowPull + series;
+}
 
+/**
+ * Same disposition as desktop. Prefer more singles at full size; if the
+ * viewport is narrower, scale the whole composition down uniformly.
+ */
+function measureFit(available: number): MeasuredFit {
   for (let n = 3; n >= 2; n--) {
-    if (tryFit(n, baseSingle)) return { singles: n, large: false };
+    if (rowWidth(n, false) <= available) {
+      return { singles: n, large: false, scale: 1 };
+    }
   }
-  if (tryFit(1, largeSingle)) return { singles: 1, large: true };
-  if (tryFit(1, baseSingle)) return { singles: 1, large: false };
-  return { singles: 1, large: true };
+  if (rowWidth(1, true) <= available) {
+    return { singles: 1, large: true, scale: 1 };
+  }
+  if (rowWidth(1, false) <= available) {
+    return { singles: 1, large: false, scale: 1 };
+  }
+
+  // Scale the desktop layout to fit. Prefer more singles while scale stays readable.
+  const MIN_SCALE = 0.48;
+  for (let n = 3; n >= 1; n--) {
+    const natural = rowWidth(n, false);
+    const scale = available / natural;
+    if (n === 1 || scale >= MIN_SCALE) {
+      return { singles: n, large: false, scale: Math.min(1, scale) };
+    }
+  }
+
+  const natural = rowWidth(1, false);
+  return {
+    singles: 1,
+    large: false,
+    scale: Math.min(1, available / natural),
+  };
 }
 
 function useCollageFit(sectionRef: RefObject<HTMLElement | null>) {
-  const [fit, setFit] = useState<CollageFit>(FIT_FULL);
+  const [fit, setFit] = useState<CollageFit>(FIT_SAFE);
 
   useEffect(() => {
     const section = sectionRef.current;
     if (!section) return;
 
     const read = () => {
-      const md = window.matchMedia("(min-width: 768px)").matches;
-      const leftFrac = md ? 0.1 : 0.08;
-      const rightPad = md ? 48 : 24;
       const width = section.clientWidth;
-      const available = Math.max(0, width * (1 - leftFrac) - rightPad);
-      const next = measureFit(available, md);
+      const md = window.matchMedia("(min-width: 768px)").matches;
+      const sidePad = Math.min(48, Math.max(20, width * 0.05));
+
+      let next: CollageFit;
+      if (md) {
+        // Desktop: same left-rail inset as before.
+        const leftFrac = 0.1;
+        const available = Math.max(0, width * (1 - leftFrac) - sidePad);
+        const measured = measureFit(available);
+        next = { ...measured, left: width * leftFrac };
+      } else {
+        // Mobile: equal side pads; stage is centered with left 50% + translateX.
+        const available = Math.max(0, width - sidePad * 2);
+        const measured = measureFit(available);
+        next = { ...measured, left: null };
+      }
+
       setFit((prev) =>
-        prev.singles === next.singles && prev.large === next.large
+        prev.singles === next.singles &&
+        prev.large === next.large &&
+        Math.abs(prev.scale - next.scale) < 0.001 &&
+        prev.left === next.left
           ? prev
           : next,
       );
@@ -94,7 +165,11 @@ function DoublesStack({
   const album = getAlbum(albumId);
   if (!album) return null;
   const covers = albumCovers(albumId);
-  const offsetStep = large ? 68 : 58;
+  const offsetStep = large ? DESKTOP.offsetLarge : DESKTOP.offset;
+  const stageW = large ? DESKTOP.seriesWLarge : DESKTOP.seriesW;
+  const stageH = large ? DESKTOP.seriesHLarge : DESKTOP.seriesH;
+  const cardW = large ? DESKTOP.cardWLarge : DESKTOP.cardW;
+  const cardH = large ? DESKTOP.cardHLarge : DESKTOP.cardH;
 
   return (
     <button
@@ -104,11 +179,8 @@ function DoublesStack({
       aria-label={`Open album ${album.label}`}
     >
       <div
-        className={
-          large
-            ? "hero-series__stage relative h-[500px] w-[370px] md:h-[600px] md:w-[450px]"
-            : "hero-series__stage relative h-[420px] w-[310px] md:h-[510px] md:w-[380px]"
-        }
+        className="hero-series__stage relative"
+        style={{ width: stageW, height: stageH }}
       >
         {covers.map((photo, index) => {
           const isLast = index === covers.length - 1;
@@ -117,11 +189,11 @@ function DoublesStack({
             <div
               key={photo.slug}
               className={`hero-staple absolute top-0 overflow-visible bg-ink/20 ${
-                large
-                  ? "h-[260px] w-[194px] md:h-[320px] md:w-[238px]"
-                  : "h-[220px] w-[164px] md:h-[270px] md:w-[200px]"
-              } ${mirror ? "right-0 left-auto" : "left-0"}`}
+                mirror ? "right-0 left-auto" : "left-0"
+              }`}
               style={{
+                width: cardW,
+                height: cardH,
                 transform: mirror
                   ? `translate(${-offset}px, ${offset}px)`
                   : `translate(${offset}px, ${offset}px)`,
@@ -133,7 +205,7 @@ function DoublesStack({
                   src={photo.src}
                   alt={photo.alt}
                   fill
-                  sizes="(min-width: 768px) 238px, 194px"
+                  sizes="(min-width: 768px) 238px, 160px"
                   className="hero-staple__img object-cover"
                 />
               </div>
@@ -163,9 +235,7 @@ function HeroSinglesRow({
 }: {
   albumId: string;
   className?: string;
-  /** How many singles to show (1–3). */
   count: number;
-  /** Top row keeps from the start; bottom mirrors by keeping from the end. */
   align: "start" | "end";
   large?: boolean;
 }) {
@@ -180,7 +250,8 @@ function HeroSinglesRow({
 
   return (
     <div
-      className={`hero-singles flex flex-row items-start gap-14 pt-4 md:gap-20 md:pt-5 ${className ?? ""}`}
+      className={`hero-singles flex flex-row items-start ${className ?? ""}`}
+      style={{ gap: DESKTOP.singleGap, paddingTop: DESKTOP.singlePt }}
     >
       {shown.map((photo) => (
         <HeroSingle
@@ -208,6 +279,9 @@ function HeroSingle({
   large?: boolean;
   onOpen: () => void;
 }) {
+  const w = large ? DESKTOP.singleWLarge : DESKTOP.singleW;
+  const h = large ? DESKTOP.singleHLarge : DESKTOP.singleH;
+
   return (
     <button
       type="button"
@@ -216,17 +290,14 @@ function HeroSingle({
       aria-label={alt}
     >
       <div
-        className={`hero-staple hero-single__frame relative overflow-hidden bg-ink/20 ${
-          large
-            ? "h-[300px] w-[224px] md:h-[380px] md:w-[282px]"
-            : "h-[260px] w-[194px] md:h-[320px] md:w-[238px]"
-        }`}
+        className="hero-staple hero-single__frame relative overflow-hidden bg-ink/20"
+        style={{ width: w, height: h }}
       >
         <Image
           src={src}
           alt={alt}
           fill
-          sizes="(min-width: 768px) 282px, 224px"
+          sizes="(min-width: 768px) 282px, 160px"
           className="hero-staple__img object-cover"
         />
       </div>
@@ -240,6 +311,9 @@ export function Hero() {
   const fit = useCollageFit(sectionRef);
   const drive = useSilkDrive(sectionRef);
 
+  const naturalW = rowWidth(fit.singles, fit.large);
+  const naturalH = rowHeight(fit.large);
+
   // Size hero to the collage so Sound sits at a consistent section gap.
   useEffect(() => {
     const section = sectionRef.current;
@@ -250,7 +324,6 @@ export function Hero() {
       const sectionTop = section.getBoundingClientRect().top;
       const stageBottom = stage.getBoundingClientRect().bottom;
       const bottom = stageBottom - sectionTop;
-      // Match section rhythm, slightly tighter into Sound.
       const pad = window.matchMedia("(min-width: 768px)").matches ? 32 : 24;
       section.style.minHeight = `${Math.ceil(bottom + pad)}px`;
     };
@@ -263,7 +336,7 @@ export function Hero() {
       ro.disconnect();
       window.removeEventListener("resize", sync);
     };
-  }, [fit.singles, fit.large]);
+  }, [fit.singles, fit.large, fit.scale, fit.left]);
 
   return (
     <section
@@ -275,39 +348,63 @@ export function Hero() {
     >
       {/* Keep #top for brand links while image nav scrolls here. */}
       <div id="top" className="pointer-events-none absolute inset-x-0 top-0 h-px" aria-hidden />
-      <div className="hero-collage pointer-events-none absolute inset-x-0 top-0 z-10 min-h-full">
+      <div className="hero-collage pointer-events-none absolute inset-x-0 top-0 z-10 min-h-full overflow-x-clip">
         <div
           ref={stageRef}
-          className="hero-collage__stage pointer-events-none absolute top-[8vh] left-[8%] z-40 md:top-[10vh] md:left-[10%]"
+          className={
+            fit.left == null
+              ? "hero-collage__stage pointer-events-none absolute top-[22vh] left-1/2 z-40 -translate-x-1/2 overflow-hidden"
+              : "hero-collage__stage pointer-events-none absolute top-[10vh] z-40 overflow-hidden"
+          }
+          style={{
+            left: fit.left == null ? undefined : fit.left,
+            width: naturalW * fit.scale,
+            height: naturalH * fit.scale,
+          }}
         >
-          <SilkArrive
-            drive={drive}
-            strength={0.7}
-            warpScale={0}
-            startVisible
-            className="flex flex-col gap-3 md:gap-4"
+          <div
+            style={{
+              width: naturalW,
+              height: naturalH,
+              transform: `scale(${fit.scale})`,
+              transformOrigin: "top left",
+            }}
           >
-            <div className="hero-collage__row hero-collage__row--top flex flex-row items-start gap-4 md:gap-5">
-              <DoublesStack albumId="doubles" large={fit.large} />
-              <HeroSinglesRow
-                albumId="doubles"
-                className="hero-singles--top"
-                count={fit.singles}
-                align="start"
-                large={fit.large}
-              />
-            </div>
-            <div className="hero-collage__row hero-collage__row--bottom -mt-16 flex flex-row items-start gap-4 md:-mt-20 md:gap-5">
-              <HeroSinglesRow
-                albumId="night"
-                className="hero-singles--bottom"
-                count={fit.singles}
-                align="end"
-                large={fit.large}
-              />
-              <DoublesStack albumId="night" mirror large={fit.large} />
-            </div>
-          </SilkArrive>
+            <SilkArrive
+              drive={drive}
+              strength={0.7}
+              warpScale={0}
+              startVisible
+              className="flex flex-col gap-4"
+            >
+              <div
+                className="hero-collage__row hero-collage__row--top flex flex-row items-start"
+                style={{ gap: DESKTOP.rowGap }}
+              >
+                <DoublesStack albumId="doubles" large={fit.large} />
+                <HeroSinglesRow
+                  albumId="doubles"
+                  className="hero-singles--top"
+                  count={fit.singles}
+                  align="start"
+                  large={fit.large}
+                />
+              </div>
+              <div
+                className="hero-collage__row hero-collage__row--bottom flex flex-row items-start"
+                style={{ gap: DESKTOP.rowGap, marginTop: -DESKTOP.rowPull }}
+              >
+                <HeroSinglesRow
+                  albumId="night"
+                  className="hero-singles--bottom"
+                  count={fit.singles}
+                  align="end"
+                  large={fit.large}
+                />
+                <DoublesStack albumId="night" mirror large={fit.large} />
+              </div>
+            </SilkArrive>
+          </div>
         </div>
       </div>
     </section>

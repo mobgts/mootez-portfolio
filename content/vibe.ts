@@ -12,18 +12,18 @@ const CREAM_WASH: [number, number, number] = [242, 237, 228]; // almost paper
 // Flat clean beige — wash ≈ paper so the field never stains.
 export const CREAM_TINT_STOPS: TintStop[] = [
   { id: "top", paper: CREAM, wash: CREAM_WASH },
-  { id: "about", paper: CREAM, wash: CREAM_WASH },
   { id: "sound", paper: CREAM, wash: CREAM_WASH },
   { id: "dev", paper: CREAM, wash: CREAM_WASH },
+  { id: "about", paper: CREAM, wash: CREAM_WASH },
   { id: "contact", paper: CREAM, wash: CREAM_WASH },
 ];
 
-// Final stretch (80%→100%): soft apricot sand, not green — gentle scroll steps.
+// Final stretch (80%→100%): soft apricot sand — same section order as olive.
 export const WARM_TINT_STOPS: TintStop[] = [
   { id: "top", paper: [236, 198, 168], wash: [210, 164, 128] },
-  { id: "about", paper: [236, 198, 168], wash: [210, 164, 128] },
-  { id: "sound", paper: [222, 180, 152], wash: [194, 146, 116] },
-  { id: "dev", paper: [228, 188, 160], wash: [200, 154, 124] },
+  { id: "sound", paper: [228, 188, 160], wash: [200, 154, 124] },
+  { id: "dev", paper: [232, 192, 166], wash: [204, 160, 130] },
+  { id: "about", paper: [238, 204, 176], wash: [214, 172, 140] },
   { id: "contact", paper: [246, 218, 192], wash: [224, 186, 156] },
 ];
 

@@ -13,6 +13,7 @@ const OPEN_TAB_PREFIX = "say-hi";
 const OPEN_TAB_TITLE = "Say hi!";
 const MAX_SAY_HI_TABS = 4;
 const TOAST_MS = 1800;
+const CHROME_MS = 320;
 const DOCK_MS = 720;
 
 type ChromePhase =
@@ -22,6 +23,8 @@ type ChromePhase =
   | "closed"
   | "opening"
   | "restoring";
+
+type ClosedAs = "folder" | "mark";
 
 function isSayHiTab(slug: string) {
   return slug.startsWith(`${OPEN_TAB_PREFIX}-`);
@@ -160,13 +163,16 @@ export function DevWork() {
   const sayHiSeq = useRef(1);
   const [inEmbed, setInEmbed] = useState(false);
   const [chromePhase, setChromePhase] = useState<ChromePhase>("open");
+  const [closedAs, setClosedAs] = useState<ClosedAs | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [dockReady, setDockReady] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [starred, setStarred] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<string | null>(null);
+  const [canScrollTabsRight, setCanScrollTabsRight] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const browserRef = useRef<HTMLDivElement>(null);
+  const tabsRef = useRef<HTMLDivElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chromeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sectionRef = useRef<HTMLElement>(null);
@@ -207,6 +213,69 @@ export function DevWork() {
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [menuOpen]);
+
+  useEffect(() => {
+    if (chromePhase === "closed") {
+      setCanScrollTabsRight(false);
+      return;
+    }
+
+    const el = tabsRef.current;
+    if (!el) return;
+
+    let raf = 0;
+    const update = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const max = el.scrollWidth - el.clientWidth;
+        setCanScrollTabsRight(max > 4 && el.scrollLeft < max - 4);
+      });
+    };
+
+    update();
+    // Children changing width doesn't always resize the scroller box.
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    for (const child of el.children) {
+      if (child instanceof HTMLElement) ro.observe(child);
+    }
+    const mo = new MutationObserver(() => {
+      for (const child of el.children) {
+        if (child instanceof HTMLElement) ro.observe(child);
+      }
+      update();
+    });
+    mo.observe(el, { childList: true });
+    el.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      mo.disconnect();
+      el.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [chromePhase, sayHiTabs.length]);
+
+  useEffect(() => {
+    if (chromePhase === "closed") return;
+    const el = tabsRef.current;
+    if (!el) return;
+    const selected = el.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!selected) return;
+    const left = selected.offsetLeft;
+    const right = left + selected.offsetWidth;
+    const pad = 12;
+    if (left < el.scrollLeft + pad) {
+      el.scrollTo({ left: Math.max(0, left - pad), behavior: "smooth" });
+    } else if (right > el.scrollLeft + el.clientWidth - pad) {
+      el.scrollTo({
+        left: right - el.clientWidth + pad,
+        behavior: "smooth",
+      });
+    }
+  }, [active, chromePhase]);
 
   // Same soft wander as the left-rail nav labels.
   useEffect(() => {
@@ -295,6 +364,18 @@ export function DevWork() {
     }, TOAST_MS);
   };
 
+  const closeChrome = () => {
+    if (chromePhase !== "open") return;
+    setMenuOpen(false);
+    setClosedAs("folder");
+    setChromePhase("closing");
+    if (chromeTimer.current) clearTimeout(chromeTimer.current);
+    chromeTimer.current = setTimeout(() => {
+      setChromePhase("closed");
+      chromeTimer.current = null;
+    }, CHROME_MS);
+  };
+
   const minimizeChrome = () => {
     if (chromePhase !== "open") return;
     setMenuOpen(false);
@@ -305,6 +386,7 @@ export function DevWork() {
     );
     if (browser && mark) setDockVars(browser, mark);
 
+    setClosedAs("mark");
     setChromePhase("minimizing");
     if (chromeTimer.current) clearTimeout(chromeTimer.current);
     chromeTimer.current = setTimeout(() => {
@@ -314,14 +396,26 @@ export function DevWork() {
     }, DOCK_MS);
   };
 
-  const restoreChrome = () => {
+  const openChrome = () => {
     if (chromePhase !== "closed") return;
+    setChromePhase("opening");
+    if (chromeTimer.current) clearTimeout(chromeTimer.current);
+    chromeTimer.current = setTimeout(() => {
+      setClosedAs(null);
+      setChromePhase("open");
+      chromeTimer.current = null;
+    }, CHROME_MS);
+  };
+
+  const restoreChrome = () => {
+    if (chromePhase !== "closed" || closedAs !== "mark") return;
     setDockReady(false);
     setChromePhase("restoring");
     if (chromeTimer.current) clearTimeout(chromeTimer.current);
     chromeTimer.current = setTimeout(() => {
       clearDockVars(browserRef.current);
       setDockReady(false);
+      setClosedAs(null);
       setChromePhase("open");
       chromeTimer.current = null;
     }, DOCK_MS);
@@ -382,7 +476,11 @@ export function DevWork() {
         navId="dev"
         label="Dev"
         extra="Selected work"
-        onActivate={chromePhase === "closed" ? restoreChrome : undefined}
+        onActivate={
+          chromePhase === "closed" && closedAs === "mark"
+            ? restoreChrome
+            : undefined
+        }
         activateLabel="Open projects"
       />
 
@@ -395,7 +493,7 @@ export function DevWork() {
           <button
             type="button"
             className={folderClass}
-            onClick={restoreChrome}
+            onClick={openChrome}
             aria-label="Open projects.folder"
             tabIndex={chromePhase === "closed" ? 0 : -1}
             aria-hidden={chromePhase !== "closed"}
@@ -428,73 +526,98 @@ export function DevWork() {
           >
             <div className="project-browser__tabs-head">
               <div
-                className="project-browser__tabs"
-                role="tablist"
-                aria-label="Projects"
+                className={
+                  canScrollTabsRight
+                    ? "project-browser__tabs-shell project-browser__tabs-shell--more"
+                    : "project-browser__tabs-shell"
+                }
               >
-                {projects.map((item) => {
-                  const isOpen = !isOpenTab && item.slug === project?.slug;
-                  return (
-                    <button
-                      key={item.slug}
-                      type="button"
-                      role="tab"
-                      aria-selected={isOpen}
-                      className={
-                        isOpen
-                          ? "project-browser__tab project-browser__tab--open"
-                          : "project-browser__tab"
-                      }
-                      onClick={() => setActive(item.slug)}
-                    >
-                      <span className="project-browser__tab-label">
-                        {item.title}
-                      </span>
-                    </button>
-                  );
-                })}
-
-                {sayHiTabs.map((id) => {
-                  const selected = active === id;
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      role="tab"
-                      aria-selected={selected}
-                      className={
-                        selected
-                          ? "project-browser__tab project-browser__tab--open"
-                          : "project-browser__tab"
-                      }
-                      onClick={() => setActive(id)}
-                    >
-                      <span className="project-browser__tab-label">
-                        {OPEN_TAB_TITLE}
-                      </span>
-                      <span
-                        className="project-browser__close-tab"
-                        role="presentation"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          closeAvailabilityTab(id);
-                        }}
-                      >
-                        ×
-                      </span>
-                    </button>
-                  );
-                })}
-
-                <button
-                  type="button"
-                  className="project-browser__new-tab"
-                  aria-label="Open Say hi! tab"
-                  disabled={sayHiTabs.length >= MAX_SAY_HI_TABS}
-                  onClick={openAvailabilityTab}
+                <div
+                  ref={tabsRef}
+                  className="project-browser__tabs"
+                  role="tablist"
+                  aria-label="Projects"
                 >
-                  +
-                </button>
+                  {projects.map((item) => {
+                    const isOpen = !isOpenTab && item.slug === project?.slug;
+                    return (
+                      <button
+                        key={item.slug}
+                        type="button"
+                        role="tab"
+                        aria-selected={isOpen}
+                        className={
+                          isOpen
+                            ? "project-browser__tab project-browser__tab--open"
+                            : "project-browser__tab"
+                        }
+                        onClick={() => setActive(item.slug)}
+                      >
+                        <span className="project-browser__tab-label">
+                          {item.title}
+                        </span>
+                      </button>
+                    );
+                  })}
+
+                  {sayHiTabs.map((id) => {
+                    const selected = active === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        role="tab"
+                        aria-selected={selected}
+                        className={
+                          selected
+                            ? "project-browser__tab project-browser__tab--open"
+                            : "project-browser__tab"
+                        }
+                        onClick={() => setActive(id)}
+                      >
+                        <span className="project-browser__tab-label">
+                          {OPEN_TAB_TITLE}
+                        </span>
+                        <span
+                          className="project-browser__close-tab"
+                          role="presentation"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            closeAvailabilityTab(id);
+                          }}
+                        >
+                          ×
+                        </span>
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    className="project-browser__new-tab"
+                    aria-label="Open Say hi! tab"
+                    disabled={sayHiTabs.length >= MAX_SAY_HI_TABS}
+                    onClick={openAvailabilityTab}
+                  >
+                    +
+                  </button>
+                </div>
+
+                {canScrollTabsRight ? (
+                  <button
+                    type="button"
+                    className="project-browser__tabs-more"
+                    aria-label="Scroll tabs right"
+                    onClick={() => {
+                      const el = tabsRef.current;
+                      if (!el) return;
+                      const step = Math.max(120, Math.round(el.clientWidth * 0.55));
+                      el.scrollLeft += step;
+                    }}
+                  >
+                    <span aria-hidden>›</span>
+                  </button>
+                ) : null}
               </div>
 
               <div className="project-browser__window-opt">
@@ -516,8 +639,8 @@ export function DevWork() {
                 <button
                   type="button"
                   className="project-browser__window-close"
-                  aria-label="Hide to Dev"
-                  onClick={minimizeChrome}
+                  aria-label="Close to projects.folder"
+                  onClick={closeChrome}
                 >
                   ×
                 </button>
@@ -660,14 +783,16 @@ export function DevWork() {
                     title={`${project!.title} — live site`}
                     bridgeCursor={isSameOriginSrc(liveEmbedSrc(project!))}
                   />
-                  <a
-                    href={absoluteUrl(project!.url!)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="project-browser__open-live"
-                  >
-                    Open live
-                  </a>
+                  {project!.slug !== "portfolio" ? (
+                    <a
+                      href={absoluteUrl(project!.url!)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="project-browser__open-live"
+                    >
+                      Open live
+                    </a>
+                  ) : null}
                 </>
               ) : (
                 <>

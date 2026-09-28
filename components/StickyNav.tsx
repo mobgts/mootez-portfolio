@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { albums } from "@/content/photos";
 import { openAlbum } from "@/content/albumUi";
 import { site } from "@/content/site";
@@ -11,17 +11,151 @@ function scrollToImage() {
   target?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-export function StickyNav() {
-  const [visible, setVisible] = useState(false);
-  const [imageOpen, setImageOpen] = useState(false);
+function clamp01(n: number) {
+  return Math.min(1, Math.max(0, n));
+}
 
+function easeInOutCubic(t: number) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+type DriftSpec = {
+  el: HTMLElement;
+  ampX: number;
+  ampY: number;
+  ampR: number;
+  speedX: number;
+  speedY: number;
+  speedR: number;
+  phaseX: number;
+  phaseY: number;
+  phaseR: number;
+  biasX: number;
+  biasY: number;
+};
+
+export function StickyNav() {
+  const [imageOpen, setImageOpen] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
+  const brandExitRef = useRef<HTMLAnchorElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+
+  // Soft wander on labels (same as desktop rail).
   useEffect(() => {
-    const onScroll = () => {
-      setVisible(window.scrollY > window.innerHeight * 0.48);
+    const bar = barRef.current;
+    if (!bar) return;
+
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (reduce.matches) return;
+
+    const items = Array.from(
+      bar.querySelectorAll<HTMLElement>("[data-rail-drift]"),
+    );
+    if (!items.length) return;
+
+    const specs: DriftSpec[] = items.map((el, i) => {
+      const album = el.classList.contains("site-nav__album-drift");
+      return {
+        el,
+        ampX: album ? 2.4 : 3.2 + (i % 3) * 1.4,
+        ampY: album ? 2.0 : 2.4 + (i % 4) * 1.1,
+        ampR: album ? 0.4 : 0.55 + (i % 3) * 0.28,
+        speedX: 0.00032 + i * 0.00006,
+        speedY: 0.00026 + i * 0.00008,
+        speedR: 0.0002 + i * 0.00005,
+        phaseX: i * 1.73,
+        phaseY: i * 2.41,
+        phaseR: i * 1.19,
+        biasX: album ? 1.6 : 0,
+        biasY: album ? -1.2 : 0,
+      };
+    });
+
+    let raf = 0;
+    const driftStart = performance.now();
+
+    const tick = (now: number) => {
+      const gain = Math.min(1, Math.max(0, (now - driftStart - 400) / 900));
+      const ease = 1 - Math.pow(1 - gain, 3);
+      for (const s of specs) {
+        const x =
+          (Math.sin(now * s.speedX + s.phaseX) * s.ampX + s.biasX) * ease;
+        const y =
+          (Math.cos(now * s.speedY + s.phaseY) * s.ampY + s.biasY) * ease;
+        const r = Math.sin(now * s.speedR + s.phaseR) * s.ampR * ease;
+        s.el.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) rotate(${r.toFixed(3)}deg)`;
+      }
+
+      raf = requestAnimationFrame(tick);
     };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+
+    raf = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      for (const s of specs) s.el.style.transform = "";
+    };
+  }, []);
+
+  // Brand exits left, nav words exit right as you leave the hero — reverse on scroll up.
+  useEffect(() => {
+    const header = headerRef.current;
+    const brand = brandExitRef.current;
+    const bar = barRef.current;
+    if (!header || !brand || !bar) return;
+
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const linkItems = Array.from(
+      bar.querySelectorAll<HTMLElement>("[data-nav-exit-item]"),
+    );
+
+    let raf = 0;
+
+    const paint = () => {
+      const end = window.innerHeight * 0.52;
+      const raw = reduce.matches ? 0 : clamp01(window.scrollY / Math.max(end, 1));
+      const p = easeInOutCubic(raw);
+
+      const brandX = -Math.min(160, window.innerWidth * 0.42) * p;
+      brand.style.transform = `translate3d(${brandX.toFixed(2)}px, 0, 0)`;
+      brand.style.opacity = String(1 - p);
+
+      const travel = Math.min(200, window.innerWidth * 0.55);
+      linkItems.forEach((el, i) => {
+        const stagger = i * 0.045;
+        const local = clamp01((raw - stagger) / Math.max(1 - stagger, 0.001));
+        const lp = easeInOutCubic(local);
+        el.style.transform = `translate3d(${(travel * lp).toFixed(2)}px, 0, 0)`;
+        el.style.opacity = String(1 - lp);
+      });
+
+      const gone = p > 0.92;
+      header.classList.toggle("is-exited", gone);
+      header.style.pointerEvents = gone ? "none" : "";
+    };
+
+    const tick = () => {
+      paint();
+      raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+    window.addEventListener("scroll", paint, { passive: true });
+    window.addEventListener("resize", paint);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", paint);
+      window.removeEventListener("resize", paint);
+      brand.style.transform = "";
+      brand.style.opacity = "";
+      for (const el of linkItems) {
+        el.style.transform = "";
+        el.style.opacity = "";
+      }
+      header.classList.remove("is-exited");
+      header.style.pointerEvents = "";
+    };
   }, []);
 
   const toggleImage = () => {
@@ -33,84 +167,87 @@ export function StickyNav() {
   };
 
   return (
-    <header
-      className={`site-nav fixed inset-x-0 top-0 z-40 md:hidden ${
-        visible ? "is-visible" : "is-hidden"
-      }`}
-    >
-      <div className="flex flex-col gap-2 px-4 py-3">
-        <div className="flex items-center justify-between gap-4">
-          <a
-            href="#top"
-            className="font-sans text-xl font-medium leading-none tracking-[0.02em]"
-          >
+    <header ref={headerRef} className="site-nav fixed inset-x-0 top-0 z-40 md:hidden">
+      <div ref={barRef} className="site-nav__bar">
+        <a ref={brandExitRef} href="#top" className="site-nav__brand">
+          <span data-rail-drift className="site-nav__brand-drift">
             <span>{site.name}.</span>
-            <span className="text-ink/70">{site.surname}</span>
-          </a>
-          <nav className="flex flex-1 items-center justify-end gap-4 overflow-x-auto text-[13px] font-medium tracking-[0.02em]">
+            <span className="site-nav__brand-soft">{site.surname}</span>
+          </span>
+        </a>
+
+        <nav className="site-nav__links" aria-label="Site">
+          <ul>
             {site.nav.map((item) =>
               item.id === "image" ? (
-                <button
-                  key={item.id}
-                  type="button"
-                  aria-expanded={imageOpen}
-                  onClick={toggleImage}
-                  data-nav-origin={item.id}
-                  className="site-nav__image-btn shrink-0 text-ink hover:text-olive-deep"
-                >
-                  <span>{item.label}</span>
-                  <span
+                <li key={item.id} data-nav-exit-item>
+                  <button
+                    type="button"
+                    aria-expanded={imageOpen}
+                    onClick={toggleImage}
+                    data-nav-origin={item.id}
+                    data-rail-drift
+                    className="site-nav__image-btn"
+                  >
+                    <span>{item.label}</span>
+                    <span
+                      className={
+                        imageOpen
+                          ? "site-nav__more site-nav__more--open"
+                          : "site-nav__more"
+                      }
+                      aria-hidden
+                    >
+                      <svg viewBox="0 0 10 6" fill="none" aria-hidden>
+                        <path d="M1 1.25L5 4.75L9 1.25" />
+                      </svg>
+                    </span>
+                  </button>
+                  <div
                     className={
                       imageOpen
-                        ? "site-nav__more site-nav__more--open"
-                        : "site-nav__more"
+                        ? "site-nav__albums is-open"
+                        : "site-nav__albums"
                     }
-                    aria-hidden
+                    aria-hidden={!imageOpen}
                   >
-                    <svg viewBox="0 0 10 6" fill="none" aria-hidden>
-                      <path d="M1 1.25L5 4.75L9 1.25" />
-                    </svg>
-                  </span>
-                </button>
+                    <div className="site-nav__albums-clip">
+                      <ul className="site-nav__albums-row">
+                        {albums.map((album, index) => (
+                          <li key={album.id}>
+                            <span
+                              className="site-nav__album-drift"
+                              data-rail-drift
+                            >
+                              <button
+                                type="button"
+                                tabIndex={imageOpen ? 0 : -1}
+                                onClick={() => openAlbum(album.id)}
+                                style={{ ["--i" as string]: index }}
+                              >
+                                {album.label.replace(/^series:\s*/i, "")}
+                              </button>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </li>
               ) : (
-                <a
-                  key={item.id}
-                  href={`#${item.id}`}
-                  data-nav-origin={item.id}
-                  className="shrink-0 text-ink hover:text-olive-deep"
-                >
-                  {item.label}
-                </a>
+                <li key={item.id} data-nav-exit-item>
+                  <a
+                    href={`#${item.id}`}
+                    data-nav-origin={item.id}
+                    data-rail-drift
+                  >
+                    {item.label}
+                  </a>
+                </li>
               ),
             )}
-          </nav>
-        </div>
-
-        <div
-          className={
-            imageOpen
-              ? "site-nav__albums is-open"
-              : "site-nav__albums"
-          }
-          aria-hidden={!imageOpen}
-        >
-          <div className="site-nav__albums-clip">
-            <div className="site-nav__albums-row">
-              {albums.map((album, index) => (
-                <button
-                  key={album.id}
-                  type="button"
-                  tabIndex={imageOpen ? 0 : -1}
-                  onClick={() => openAlbum(album.id)}
-                  className="shrink-0 text-ink/80 hover:text-olive-deep"
-                  style={{ ["--i" as string]: index }}
-                >
-                  {album.label.replace(/^series:\s*/i, "")}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+          </ul>
+        </nav>
       </div>
     </header>
   );

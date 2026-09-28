@@ -120,8 +120,8 @@ export function AboutPhoto({ src, maskSrc, alt }: AboutPhotoProps) {
         src={src}
         alt={alt}
         fill
-        className="object-cover object-[center_42%]"
-        sizes="(max-width: 768px) 22rem, 30rem"
+        className="object-cover object-[center_48%]"
+        sizes="(max-width: 768px) 22rem, 28rem"
         priority
         unoptimized
       />
@@ -140,8 +140,8 @@ export function AboutPhoto({ src, maskSrc, alt }: AboutPhotoProps) {
           src={src}
           alt=""
           fill
-          className="object-cover object-[center_42%]"
-          sizes="(max-width: 768px) 22rem, 30rem"
+          className="object-cover object-[center_48%]"
+          sizes="(max-width: 768px) 22rem, 28rem"
           priority
           unoptimized
         />

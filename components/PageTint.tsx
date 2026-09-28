@@ -18,7 +18,7 @@ function rgb(c: [number, number, number]) {
 const INK_DARK: [number, number, number] = [34, 28, 22];
 const INK_LIGHT: [number, number, number] = [247, 246, 242];
 const CREAM_LIFT: [number, number, number] = [250, 246, 238];
-const LERP = 0.12;
+const LERP = 0.14;
 
 export function PageTint() {
   useEffect(() => {
@@ -44,7 +44,9 @@ export function PageTint() {
 
     const readStops = () => {
       warmth = getVibe().color;
-      target = sampleVibeTintAt(window.scrollY, window.innerHeight, warmth);
+      const vv = window.visualViewport;
+      const viewH = Math.max(window.innerHeight, vv?.height ?? 0);
+      target = sampleVibeTintAt(window.scrollY, viewH, warmth);
     };
 
     const paint = () => {
@@ -111,12 +113,15 @@ export function PageTint() {
     raf = requestAnimationFrame(paint);
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", onScroll);
     const unsub = subscribeVibe(() => readStops());
 
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
+      vv?.removeEventListener("resize", onScroll);
       unsub();
     };
   }, []);
