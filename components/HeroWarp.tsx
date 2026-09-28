@@ -19,7 +19,7 @@ type HeroWarpProps = {
 };
 
 /** Bump when fragment logic changes so the WebGL program recompiles on HMR. */
-const WARP_SHADER_REV = 7;
+const WARP_SHADER_REV = 8;
 
 /** Layout + visual viewport — mobile chrome must never undersize the field. */
 function viewportBox() {
@@ -80,7 +80,6 @@ uniform float uRadius;
 uniform float uTime;
 uniform float uMotion;
 uniform float uTint;
-uniform float uLite;
 uniform sampler2D uPhoto;
 uniform sampler2D uFlow;
 uniform sampler2D uBleed;
@@ -93,28 +92,22 @@ vec2 unitOr(vec2 v, vec2 fallback) {
   return len > 0.001 ? v / len : fallback;
 }
 
-// Where in the silk map a point of the page lands. The map is square and tiled at
-// the viewport width, so a page pixel and a map pixel are the same size in both
-// axes; mirroring on alternate tiles keeps the drape meeting edge to edge.
-// On narrow screens keep the period near ~2 viewports — long enough to avoid
-// obvious re-stamps, short enough that ridges still read as cloth, not a flat slide.
+// Period matches desktop: viewport width, or 1.6 viewports if the screen is narrow.
+// Same formula on every device so folds (and the wash they pick up) match.
+float silkTileH() {
+  return max(max(uRes.x, 640.0), uViewH * 1.6);
+}
+
 vec2 silkUv(float x, float pageY) {
-  float base = max(uRes.x, 640.0);
-  float narrow = 1.0 - smoothstep(640.0, 960.0, uRes.x);
-  float tileH = mix(base, max(base, uViewH * 2.05), narrow);
+  float tileH = silkTileH();
   return vec2(x, abs(fract((pageY / tileH) * 0.5) * 2.0 - 1.0));
 }
 
-// Soft 5-tap on desktop; single fetch on narrow (uLite) so phones keep scroll headroom.
 vec4 flowSample(float x, float pageY) {
-  vec4 c = texture2D(uFlow, silkUv(x, pageY));
-  if (uLite > 0.5) return c;
-  float base = max(uRes.x, 640.0);
-  float narrow = 1.0 - smoothstep(640.0, 960.0, uRes.x);
-  float tileH = mix(base, max(base, uViewH * 2.05), narrow);
+  float tileH = silkTileH();
   float dx = 1.25 / max(uRes.x, 1.0);
   float dy = 1.25 * clamp(tileH / max(uViewH, 1.0), 0.85, 2.4);
-  c *= 0.4;
+  vec4 c = texture2D(uFlow, silkUv(x, pageY)) * 0.4;
   c += texture2D(uFlow, silkUv(x + dx, pageY)) * 0.15;
   c += texture2D(uFlow, silkUv(x - dx, pageY)) * 0.15;
   c += texture2D(uFlow, silkUv(x, pageY + dy)) * 0.15;
@@ -173,7 +166,7 @@ void main() {
   float aspect = uRes.x / max(uRes.y, 1.0);
 
   // Document Y of this pixel (px from top of page).
-  float docY = uScroll + (1.0 - p.y) * uViewH;
+  float docY = uScroll + (1.0 - p.y) * uRes.y;
   float heroH = max(uHeroH, 1.0);
   float portraitTop = uPortraitTop;
   float portraitH = max(uPortraitH, 1.0);
@@ -222,12 +215,10 @@ void main() {
   float paperLum = dot(uPaper, LUMA);
   float paperBright = smoothstep(0.58, 0.9, paperLum);
   float tintLive = smoothstep(0.03, 0.55, uTint);
-  float narrowScreen = 1.0 - smoothstep(640.0, 960.0, uRes.x);
-  // Keep fold look identical to desktop; only ease motion a touch on phone.
   float silkGain = mix(0.06, 1.0, tintLive) * mix(1.0, 0.45, paperBright * (1.0 - tintLive));
   float liftGain = mix(0.08, 1.0, tintLive) * mix(1.0, 0.28, paperBright * (1.0 - tintLive));
   float shadeGain = mix(0.35, 1.0, tintLive) * mix(1.0, 1.15, paperBright);
-  float motionAmt = uMotion * mix(1.0, 0.72, narrowScreen);
+  float motionAmt = uMotion;
 
   // The silk at rest, read only to find how the fold under this pixel sits.
   vec4 rest = flowSample(p.x, docY);
@@ -249,14 +240,13 @@ void main() {
   // letting it cross the page as a flat bar. Bend has to come off the ridge field
   // rather than the fold's run across the frame: the run is built from min() of two
   // slabs, and the kink where they trade places would set as a crease in the wave.
-  // Mobile: a touch calmer than desktop, still clearly alive.
-  float lane = max(uViewH, 420.0) * mix(0.75, 0.82, narrowScreen);
-  float journey = (docY + restRidge * 90.0 - uTime * mix(150.0, 125.0, narrowScreen)) / lane;
+  float lane = max(uViewH, 420.0) * 0.75;
+  float journey = (docY + restRidge * 90.0 - uTime * 150.0) / lane;
   float seat = fract(journey) - 0.5;
-  float ball = exp(-seat * seat * mix(11.0, 12.0, narrowScreen));
+  float ball = exp(-seat * seat * 11.0);
 
   // Beneath it a slow undertow, so the drape is never quite still between passes.
-  float undertow = sin(journey * 2.2 + restRidge * 2.4) * mix(0.3, 0.24, narrowScreen);
+  float undertow = sin(journey * 2.2 + restRidge * 2.4) * 0.3;
   float ripple = (ball + undertow) * motionAmt * silkGain;
 
   // Extra continuity bead: seeds in the left wrap and rides the same fold line
@@ -264,8 +254,8 @@ void main() {
   vec2 aheadPt = px + restDir * ends.x;
   vec2 behindPt = px - restDir * ends.y;
   float fromLeft = aheadPt.x < behindPt.x ? ends.x : ends.y;
-  float leadLane = max(uViewH, 420.0) * mix(1.05, 1.15, narrowScreen);
-  float leadJourney = (docY * 0.65 + fromLeft * 1.55 + restRidge * 55.0 - uTime * mix(110.0, 90.0, narrowScreen)) / leadLane;
+  float leadLane = max(uViewH, 420.0) * 1.05;
+  float leadJourney = (docY * 0.65 + fromLeft * 1.55 + restRidge * 55.0 - uTime * 110.0) / leadLane;
   float leadSeat = fract(leadJourney) - 0.5;
   float leadBall = exp(-leadSeat * leadSeat * 16.0);
   float leadOnLine = exp(-restRidge * restRidge * 4.2) * (0.25 + 0.75 * rest.b);
@@ -275,9 +265,8 @@ void main() {
   // Re-read the fold map further along the fold's own line. Shifting the lookup
   // rather than the output means the drape itself rolls, which is what carries the
   // movement onto bare paper further down the page where there is no photo left.
-  float slideScale = mix(1.0, 0.78, narrowScreen);
-  vec2 slide = (travel * 60.0 + vec2(-travel.y, travel.x) * 26.0) * ripple * slideScale;
-  slide += (travel * 78.0 + vec2(-travel.y, travel.x) * 34.0) * leadBead * slideScale;
+  vec2 slide = (travel * 60.0 + vec2(-travel.y, travel.x) * 26.0) * ripple;
+  slide += (travel * 78.0 + vec2(-travel.y, travel.x) * 34.0) * leadBead;
   vec4 flow = flowSample(p.x + slide.x / uRes.x, docY + slide.y);
   vec2 tangent = unitOr(flow.rg * 2.0 - 1.0, vec2(1.0, 0.0));
   vec2 perp = vec2(-tangent.y, tangent.x);
@@ -557,10 +546,6 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
     portraitTop: 1,
     portraitH: 1,
   });
-  const tintRef = useRef({
-    paper: [187 / 255, 191 / 255, 120 / 255] as [number, number, number],
-    wash: [154 / 255, 156 / 255, 85 / 255] as [number, number, number],
-  });
   const reduceMotionRef = useRef(false);
   const silkRef = useRef(getVibe().silk);
   const tintColorRef = useRef(mapVibeColor(getVibe().color));
@@ -627,19 +612,14 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
         portraitTop,
         portraitH,
       };
-      const tint = sampleVibeTintAt(window.scrollY, viewH, getVibe().color);
-      tintRef.current = {
-        paper: [tint.paper[0] / 255, tint.paper[1] / 255, tint.paper[2] / 255],
-        wash: [tint.wash[0] / 255, tint.wash[1] / 255, tint.wash[2] / 255],
-      };
     };
 
+    // Layout only — the scroll offset and the tint are read in the draw loop, so
+    // there is no scroll listener here to run on the phone's main thread.
     readScroll();
-    window.addEventListener("scroll", readScroll, { passive: true });
     window.addEventListener("resize", readScroll);
     const vv = window.visualViewport;
     vv?.addEventListener("resize", readScroll);
-    vv?.addEventListener("scroll", readScroll);
     const unsub = subscribeVibe(readScroll);
     const ro = new ResizeObserver(readScroll);
     ro.observe(document.documentElement);
@@ -647,10 +627,8 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
     const aboutEl = document.querySelector<HTMLElement>("#about");
     if (aboutEl) ro.observe(aboutEl);
     return () => {
-      window.removeEventListener("scroll", readScroll);
       window.removeEventListener("resize", readScroll);
       vv?.removeEventListener("resize", readScroll);
-      vv?.removeEventListener("scroll", readScroll);
       unsub();
       ro.disconnect();
     };
@@ -713,7 +691,6 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
       time: gl.getUniformLocation(program, "uTime"),
       motion: gl.getUniformLocation(program, "uMotion"),
       tint: gl.getUniformLocation(program, "uTint"),
-      lite: gl.getUniformLocation(program, "uLite"),
       photo: gl.getUniformLocation(program, "uPhoto"),
       flow: gl.getUniformLocation(program, "uFlow"),
       bleed: gl.getUniformLocation(program, "uBleed"),
@@ -729,18 +706,36 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
     let maskTex: WebGLTexture | null = null;
     let width = 0;
     let height = 0;
+    let viewH = 1;
+    let overscan = 0;
+    let drawnScroll = 0;
+
+    const slipCanvas = () => {
+      const dy = Math.max(
+        -overscan,
+        Math.min(overscan, drawnScroll - window.scrollY),
+      );
+      canvas.style.transform = `translate3d(0, ${dy}px, 0)`;
+    };
 
     const resize = () => {
       const lite = isLiteField();
       // Phones: stay near 1× so scroll compositing is not fighting a 2× silk buffer.
-      const dpr = Math.min(window.devicePixelRatio || 1, lite ? 1.15 : 2);
+      const dpr = Math.min(window.devicePixelRatio || 1, lite ? 1.25 : 2);
       const box = viewportBox();
-      // Prefer the live wrap box when CSS dvh has settled; never go smaller than VV.
-      width = Math.max(1, Math.round(Math.max(box.w, wrap.clientWidth || 0)));
-      height = Math.max(1, Math.round(Math.max(box.h, wrap.clientHeight || 0)));
+      const cssW = Math.max(1, Math.round(Math.max(box.w, wrap.clientWidth || 0)));
+      viewH = Math.max(1, Math.round(Math.max(box.h, wrap.clientHeight || 0)));
+      // Extra band so a compositor fling can slide the last frame instead of tearing.
+      overscan = Math.round(viewH * 0.45);
+      width = cssW;
+      height = viewH + overscan * 2;
+      canvas.style.top = `${-overscan}px`;
+      canvas.style.height = `${height}px`;
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       gl.viewport(0, 0, canvas.width, canvas.height);
+      drawnScroll = window.scrollY;
+      canvas.style.transform = "translate3d(0, 0, 0)";
     };
 
     const contextLost = (event: Event) => {
@@ -786,6 +781,8 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
         const vv = window.visualViewport;
         vv?.addEventListener("resize", resize);
         window.addEventListener("resize", resize);
+        window.addEventListener("scroll", slipCanvas, { passive: true });
+        vv?.addEventListener("scroll", slipCanvas);
         setMode("gl");
 
         let smoothX = width * 0.5;
@@ -798,36 +795,23 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
         let velY = 0;
         let wasOn = false;
         let smoothOn = 0;
-        let smoothPaper = [...tintRef.current.paper] as [number, number, number];
-        let smoothWash = [...tintRef.current.wash] as [number, number, number];
         let primed = false;
         let smoothMotion = motionRef.current;
         let smoothTint = tintColorRef.current;
         let animTime = 0;
         let lastNow = performance.now();
-        let lastDraw = 0;
-        const lite = isLiteField();
-        // ~30fps silk on phones leaves the compositor free for touch scroll.
-        const minFrameMs = lite ? 32 : 0;
 
         const tick = () => {
           if (disposed) return;
           raf = requestAnimationFrame(tick);
           const now = performance.now();
-          if (minFrameMs > 0 && now - lastDraw < minFrameMs) return;
-          lastDraw = now;
           const dt = Math.min(0.05, (now - lastNow) / 1000);
           lastNow = now;
           animTime += dt * (reduceMotionRef.current
             ? 0
             : silkMotionScale(silkRef.current, tintColorRef.current));
-          const {
-            y: scrollY,
-            heroH,
-            pageH,
-            portraitTop,
-            portraitH,
-          } = scrollRef.current;
+          const { heroH, pageH, portraitTop, portraitH } = scrollRef.current;
+          const scrollY = window.scrollY;
 
           const targetX = pointer.current.x;
           const targetY = pointer.current.y;
@@ -884,19 +868,22 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
           smoothMotion += (motionRef.current - smoothMotion) * 0.08;
           smoothTint += (tintColorRef.current - smoothTint) * 0.1;
 
-          const tp = tintRef.current.paper;
-          const tw = tintRef.current.wash;
-          // Match PageTint LERP so CSS chrome and the silk field stay in lockstep.
-          smoothPaper = [
-            smoothPaper[0] + (tp[0] - smoothPaper[0]) * 0.14,
-            smoothPaper[1] + (tp[1] - smoothPaper[1]) * 0.14,
-            smoothPaper[2] + (tp[2] - smoothPaper[2]) * 0.14,
-          ];
-          smoothWash = [
-            smoothWash[0] + (tw[0] - smoothWash[0]) * 0.14,
-            smoothWash[1] + (tw[1] - smoothWash[1]) * 0.14,
-            smoothWash[2] + (tw[2] - smoothWash[2]) * 0.14,
-          ];
+          // Same grade as desktop CSS — no catch-up lerp (that was the colour lag).
+          const tint = sampleVibeTintAt(
+            scrollY,
+            window.innerHeight,
+            getVibe().color,
+          );
+          const paper = [
+            tint.paper[0] / 255,
+            tint.paper[1] / 255,
+            tint.paper[2] / 255,
+          ] as const;
+          const wash = [
+            tint.wash[0] / 255,
+            tint.wash[1] / 255,
+            tint.wash[2] / 255,
+          ] as const;
 
           gl.uniform2f(u.res, width, height);
           gl.uniform1f(u.photoAspect, photoAspect);
@@ -905,12 +892,11 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
           gl.uniform1f(u.heroH, heroH);
           gl.uniform1f(u.portraitTop, portraitTop);
           gl.uniform1f(u.portraitH, portraitH);
-          gl.uniform1f(u.scroll, scrollY);
-          // Canvas display height is source of truth — keeps docY continuous with uRes.
-          gl.uniform1f(u.viewH, height);
+          gl.uniform1f(u.scroll, scrollY - overscan);
+          gl.uniform1f(u.viewH, viewH);
           gl.uniform1f(u.pageH, Math.max(pageH, height));
-          gl.uniform3f(u.paper, smoothPaper[0], smoothPaper[1], smoothPaper[2]);
-          gl.uniform3f(u.wash, smoothWash[0], smoothWash[1], smoothWash[2]);
+          gl.uniform3f(u.paper, paper[0], paper[1], paper[2]);
+          gl.uniform3f(u.wash, wash[0], wash[1], wash[2]);
           gl.uniform2f(u.cursor, smoothX, smoothY);
           gl.uniform2f(u.cursorTrail, trailX, trailY);
           gl.uniform2f(u.cursorVel, dirX * speed, dirY * speed);
@@ -919,8 +905,9 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
           gl.uniform1f(u.time, animTime);
           gl.uniform1f(u.motion, smoothMotion);
           gl.uniform1f(u.tint, smoothTint);
-          gl.uniform1f(u.lite, lite ? 1 : 0);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
+          drawnScroll = scrollY;
+          canvas.style.transform = "translate3d(0, 0, 0)";
         };
 
         raf = requestAnimationFrame(tick);
@@ -934,7 +921,9 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
       cancelAnimationFrame(raf);
       observer?.disconnect();
       window.visualViewport?.removeEventListener("resize", resize);
+      window.visualViewport?.removeEventListener("scroll", slipCanvas);
       window.removeEventListener("resize", resize);
+      window.removeEventListener("scroll", slipCanvas);
       canvas.removeEventListener("webglcontextlost", contextLost);
       if (photoTex) gl.deleteTexture(photoTex);
       if (flowTex) gl.deleteTexture(flowTex);
@@ -955,7 +944,7 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
     >
       <canvas
         ref={canvasRef}
-        className="hero-warp__canvas absolute inset-0 h-full w-full"
+        className="hero-warp__canvas absolute left-0 w-full"
         aria-hidden
       />
       {mode === "fallback" ? (

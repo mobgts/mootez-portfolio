@@ -16,6 +16,18 @@ type AlbumOverlayProps = {
   onSelectAlbum: (albumId: string) => void;
 };
 
+function photoAspect(span: Photo["span"]) {
+  if (span === "wide") return "3 / 2";
+  if (span === "square") return "1 / 1";
+  return "3 / 4";
+}
+
+function photoAspectClass(span: Photo["span"]) {
+  if (span === "wide") return "aspect-[3/2]";
+  if (span === "square") return "aspect-square";
+  return "aspect-[3/4]";
+}
+
 type DriftSpec = {
   el: HTMLElement;
   ampX: number;
@@ -367,7 +379,9 @@ export function AlbumOverlay({
                     className="album-overlay__item group w-[min(42vw,200px)] shrink-0 overflow-visible text-left md:w-[min(22vw,220px)]"
                     style={{ ["--i" as string]: index }}
                   >
-                    <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#221c16]/80">
+                    <div
+                      className={`relative w-full overflow-hidden bg-[#221c16]/80 ${photoAspectClass(photo.span)}`}
+                    >
                       <Still
                         src={photo.src}
                         alt={photo.alt}
@@ -394,9 +408,15 @@ export function AlbumOverlay({
                   key={active.slug}
                   className="album-overlay__photo relative overflow-hidden"
                   style={{
-                    aspectRatio: "3 / 4",
-                    width: "min(100%, calc((92svh - 9rem) * 3 / 4))",
+                    aspectRatio: photoAspect(active.span),
+                    width:
+                      active.span === "wide"
+                        ? "min(100%, calc((92svh - 9rem) * 3 / 2))"
+                        : active.span === "square"
+                          ? "min(100%, calc(92svh - 9rem))"
+                          : "min(100%, calc((92svh - 9rem) * 3 / 4))",
                     maxHeight: "calc(92svh - 9rem)",
+                    maxWidth: "100%",
                     height: "auto",
                   }}
                 >
@@ -406,8 +426,8 @@ export function AlbumOverlay({
                     fill
                     priority
                     quality={95}
-                    sizes="(max-width: 768px) 80vw, 440px"
-                    className="object-cover"
+                    sizes="(max-width: 768px) 90vw, 720px"
+                    className="object-contain"
                   />
                   <button
                     type="button"
@@ -464,6 +484,12 @@ export function AlbumOverlay({
               >
                 {current.photos.map((photo) => {
                   const isActive = photo.slug === active.slug;
+                  const thumb =
+                    photo.span === "wide"
+                      ? { width: 36, height: 24 }
+                      : photo.span === "square"
+                        ? { width: 28, height: 28 }
+                        : { width: 28, height: 36 };
                   return (
                     <button
                       key={photo.slug}
@@ -475,16 +501,16 @@ export function AlbumOverlay({
                           ? "opacity-100 ring-1 ring-[#f7f0e4]/70"
                           : "opacity-45 hover:opacity-80"
                       }`}
-                      style={{ width: 28, height: 36 }}
+                      style={thumb}
                       aria-label={photo.alt}
                       aria-current={isActive ? "true" : undefined}
                     >
                       <Image
                         src={photo.src}
                         alt=""
-                        width={28}
-                        height={36}
-                        sizes="28px"
+                        width={thumb.width}
+                        height={thumb.height}
+                        sizes={`${thumb.width}px`}
                         className="h-full w-full object-cover"
                       />
                     </button>

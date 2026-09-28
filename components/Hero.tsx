@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { openAlbumDirect } from "@/content/albumUi";
 import { getAlbum } from "@/content/photos";
+import type { Photo } from "@/content/types";
 import { SilkArrive, useSilkDrive } from "./AboutSilk";
 
 /** Desktop collage metrics — source of truth. Everything else scales from these. */
@@ -28,6 +29,55 @@ const DESKTOP = {
   rowPull: 80,
   singlePt: 20,
 } as const;
+
+/**
+ * Landscape shots are rotated into the portrait staple so the collage
+ * keeps one viewing style. Overlay still shows them native.
+ */
+function StapleImage({
+  photo,
+  frameW,
+  frameH,
+  sizes,
+}: {
+  photo: Photo;
+  frameW: number;
+  frameH: number;
+  sizes: string;
+}) {
+  if (photo.span !== "wide") {
+    return (
+      <Image
+        src={photo.src}
+        alt={photo.alt}
+        fill
+        sizes={sizes}
+        className="hero-staple__img object-cover"
+      />
+    );
+  }
+
+  return (
+    <div
+      className="absolute"
+      style={{
+        width: frameH,
+        height: frameW,
+        left: (frameW - frameH) / 2,
+        top: (frameH - frameW) / 2,
+        transform: "rotate(90deg)",
+      }}
+    >
+      <Image
+        src={photo.src}
+        alt={photo.alt}
+        fill
+        sizes={sizes}
+        className="hero-staple__img object-cover"
+      />
+    </div>
+  );
+}
 
 type MeasuredFit = {
   singles: number;
@@ -201,12 +251,11 @@ function DoublesStack({
               }}
             >
               <div className="relative h-full w-full overflow-hidden">
-                <Image
-                  src={photo.src}
-                  alt={photo.alt}
-                  fill
+                <StapleImage
+                  photo={photo}
+                  frameW={cardW}
+                  frameH={cardH}
                   sizes="(min-width: 768px) 238px, 160px"
-                  className="hero-staple__img object-cover"
                 />
               </div>
               {isLast ? (
@@ -242,7 +291,8 @@ function HeroSinglesRow({
   const album = getAlbum(albumId);
   if (!album) return null;
 
-  const photos = album.photos.slice(0, 3);
+  // Singles preview: only shots past the stack covers (first 3).
+  const photos = album.photos.slice(3);
   const shown =
     align === "start"
       ? photos.slice(0, count)
@@ -256,8 +306,7 @@ function HeroSinglesRow({
       {shown.map((photo) => (
         <HeroSingle
           key={photo.slug}
-          src={photo.src}
-          alt={photo.alt}
+          photo={photo}
           large={large}
           onOpen={() => openAlbumDirect(album, photo.slug)}
         />
@@ -267,14 +316,12 @@ function HeroSinglesRow({
 }
 
 function HeroSingle({
-  src,
-  alt,
+  photo,
   className,
   large = false,
   onOpen,
 }: {
-  src: string;
-  alt: string;
+  photo: Photo;
   className?: string;
   large?: boolean;
   onOpen: () => void;
@@ -287,18 +334,17 @@ function HeroSingle({
       type="button"
       onClick={onOpen}
       className={`hero-enter hero-enter--stack hero-single pointer-events-auto text-left ${className ?? ""}`}
-      aria-label={alt}
+      aria-label={photo.alt}
     >
       <div
         className="hero-staple hero-single__frame relative overflow-hidden bg-ink/20"
         style={{ width: w, height: h }}
       >
-        <Image
-          src={src}
-          alt={alt}
-          fill
+        <StapleImage
+          photo={photo}
+          frameW={w}
+          frameH={h}
           sizes="(min-width: 768px) 282px, 160px"
-          className="hero-staple__img object-cover"
         />
       </div>
     </button>
@@ -395,13 +441,13 @@ export function Hero() {
                 style={{ gap: DESKTOP.rowGap, marginTop: -DESKTOP.rowPull }}
               >
                 <HeroSinglesRow
-                  albumId="night"
+                  albumId="funeral"
                   className="hero-singles--bottom"
                   count={fit.singles}
                   align="end"
                   large={fit.large}
                 />
-                <DoublesStack albumId="night" mirror large={fit.large} />
+                <DoublesStack albumId="funeral" mirror large={fit.large} />
               </div>
             </SilkArrive>
           </div>

@@ -84,6 +84,15 @@ export function bindTintTopInvalidation() {
   };
 }
 
+/**
+ * Colour at a scroll position, graded between the two neighbouring sections.
+ *
+ * The blend runs on the *fraction* of the gap between two stops, never on a pixel
+ * radius: mobile stacks the same sections much taller, and a fixed radius there
+ * leaves the sample sitting on one pure stop for screens at a time, so the phone
+ * and the desktop showed different colours for the same section. Proportional
+ * means both walk the identical colour sequence, just stretched over more page.
+ */
 export function sampleTintAt(
   scrollY: number,
   viewH: number,
@@ -91,8 +100,6 @@ export function sampleTintAt(
 ): TintSample {
   // Sample a touch above mid-viewport so the next stop arrives with the section.
   const y = scrollY + viewH * 0.34;
-  // Wide falloff — on short mobile sections keep the grade soft across ~a viewport+.
-  const radius = Math.max(320, viewH * (viewH < 780 ? 1.15 : 0.9));
 
   ensureTintTops(stops);
 
@@ -112,31 +119,22 @@ export function sampleTintAt(
     return { paper: [...fallback.paper], wash: [...fallback.wash] };
   }
 
-  let paper: [number, number, number] = [0, 0, 0];
-  let wash: [number, number, number] = [0, 0, 0];
-  let wSum = 0;
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (y <= first.top) return { paper: [...first.paper], wash: [...first.wash] };
+  if (y >= last.top) return { paper: [...last.paper], wash: [...last.wash] };
 
-  for (const p of points) {
-    const d = Math.abs(y - p.top);
-    const w = smoothstep(1 - d / radius);
-    if (w <= 0) continue;
-    paper[0] += p.paper[0] * w;
-    paper[1] += p.paper[1] * w;
-    paper[2] += p.paper[2] * w;
-    wash[0] += p.wash[0] * w;
-    wash[1] += p.wash[1] * w;
-    wash[2] += p.wash[2] * w;
-    wSum += w;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const a = points[i];
+    const b = points[i + 1];
+    if (y > b.top) continue;
+    const span = Math.max(b.top - a.top, 1);
+    const t = smoothstep((y - a.top) / span);
+    return {
+      paper: mixRgb(a.paper, b.paper, t),
+      wash: mixRgb(a.wash, b.wash, t),
+    };
   }
 
-  if (wSum < 1e-6) {
-    // Past the last stop (or before the first): hold the nearest end.
-    const end = y <= points[0].top ? points[0] : points[points.length - 1];
-    return { paper: [...end.paper], wash: [...end.wash] };
-  }
-
-  return {
-    paper: [paper[0] / wSum, paper[1] / wSum, paper[2] / wSum],
-    wash: [wash[0] / wSum, wash[1] / wSum, wash[2] / wSum],
-  };
+  return { paper: [...last.paper], wash: [...last.wash] };
 }

@@ -494,8 +494,12 @@ html.has-cursor-none * {
   transition:
     opacity 1.1s cubic-bezier(0.16, 1, 0.3, 1),
     filter 420ms ease,
-    transform 420ms ease,
     background-color 80ms linear;
+}
+
+.hero-warp__canvas {
+  display: block;
+  will-change: transform;
 }
 
 .hero-warp.is-awake,

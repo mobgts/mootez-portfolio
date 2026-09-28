@@ -2,6 +2,7 @@ import type { Album, Photo } from "./types";
 
 // Drop files into public/photos/<album>/, then register them here.
 // First 3 per album = hero stack + overlay covers.
+// Photos after that = hero singles preview (never repeats stack covers).
 // Unassigned shots live in public/photos/inbox/ until you wire them.
 
 const doublesPhotos: Photo[] = [
@@ -34,34 +35,51 @@ const doublesPhotos: Photo[] = [
   },
 ];
 
-// Placeholder night album — replace files in public/photos/night/ when ready.
-const nightPhotos: Photo[] = [
+const funeralPhotos: Photo[] = [
   {
-    slug: "night-01",
-    filename: "NIGHT_01",
-    src: "/photos/night/stack-01.jpg",
-    alt: "Series: night — close embrace on a fallen trunk",
+    slug: "funeral-01",
+    filename: "FUNERAL_01",
+    src: "/photos/funeral/stack-01.jpg",
+    alt: "Series: funeral — scream emerging from dark water with flowers",
     year: "'26",
-    location: "Night",
+    location: "Water",
     span: "tall",
   },
   {
-    slug: "night-02",
-    filename: "NIGHT_02",
-    src: "/photos/night/stack-02.jpg",
-    alt: "Series: night — embrace on a fallen trunk",
+    slug: "funeral-02",
+    filename: "FUNERAL_02",
+    src: "/photos/funeral/stack-02.jpg",
+    alt: "Series: funeral — standing waist-deep holding a bouquet",
     year: "'26",
-    location: "Night",
+    location: "Water",
     span: "tall",
   },
   {
-    slug: "night-03",
-    filename: "NIGHT_03",
-    src: "/photos/night/stack-03.jpg",
-    alt: "Series: night — seated on a fallen trunk",
+    slug: "funeral-03",
+    filename: "FUNERAL_03",
+    src: "/photos/funeral/stack-03.jpg",
+    alt: "Series: funeral — submerged face-up with flowers on the chest",
     year: "'26",
-    location: "Night",
-    span: "tall",
+    location: "Water",
+    span: "wide",
+  },
+  {
+    slug: "funeral-04",
+    filename: "FUNERAL_04",
+    src: "/photos/funeral/04.jpg",
+    alt: "Series: funeral — arm rising from dark water with pink flowers",
+    year: "'26",
+    location: "Water",
+    span: "wide",
+  },
+  {
+    slug: "funeral-05",
+    filename: "FUNERAL_05",
+    src: "/photos/funeral/05.jpg",
+    alt: "Series: funeral — torso floating in dark water at golden hour",
+    year: "'26",
+    location: "Water",
+    span: "wide",
   },
 ];
 
@@ -72,9 +90,9 @@ export const albums: Album[] = [
     photos: doublesPhotos,
   },
   {
-    id: "night",
-    label: "series: night",
-    photos: nightPhotos,
+    id: "funeral",
+    label: "series: funeral",
+    photos: funeralPhotos,
   },
 ];
 

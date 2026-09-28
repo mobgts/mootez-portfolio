@@ -47,15 +47,14 @@ export function PageTint() {
 
     const readStops = () => {
       warmth = getVibe().color;
-      const vv = window.visualViewport;
-      const viewH = Math.max(window.innerHeight, vv?.height ?? 0);
-      target = sampleVibeTintAt(window.scrollY, viewH, warmth);
+      target = sampleVibeTintAt(window.scrollY, window.innerHeight, warmth);
     };
 
     const paint = () => {
+      readStops();
       current = {
-        paper: mixRgb(current.paper, target.paper, LERP),
-        wash: mixRgb(current.wash, target.wash, LERP),
+        paper: [...target.paper] as [number, number, number],
+        wash: [...target.wash] as [number, number, number],
       };
 
       const next = vibeAccents(warmth);
