@@ -110,6 +110,18 @@ export function useSilkDrive(sectionRef: RefObject<HTMLElement | null>) {
     window.addEventListener("scroll", readEmerge, { passive: true });
     window.addEventListener("resize", readEmerge);
 
+    const lite =
+      window.matchMedia("(pointer: coarse)").matches ||
+      window.matchMedia("(max-width: 767px)").matches;
+    let scrollBusyUntil = 0;
+    const markBusy = () => {
+      scrollBusyUntil = performance.now() + 180;
+    };
+    if (lite) {
+      window.addEventListener("scroll", markBusy, { passive: true });
+      window.addEventListener("touchmove", markBusy, { passive: true });
+    }
+
     const paint = (
       x: number,
       y: number,
@@ -154,6 +166,7 @@ export function useSilkDrive(sectionRef: RefObject<HTMLElement | null>) {
 
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
+      if (lite && now < scrollBusyUntil) return;
       const dt = Math.min(0.05, (now - lastNow) / 1000);
       lastNow = now;
 
@@ -193,6 +206,8 @@ export function useSilkDrive(sectionRef: RefObject<HTMLElement | null>) {
       cancelAnimationFrame(raf);
       window.removeEventListener("scroll", readEmerge);
       window.removeEventListener("resize", readEmerge);
+      window.removeEventListener("scroll", markBusy);
+      window.removeEventListener("touchmove", markBusy);
       query.removeEventListener("change", onReduce);
       unsub();
     };

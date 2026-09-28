@@ -7,6 +7,7 @@ import {
   sampleVibeTintAt,
   silkMotionScale,
   subscribeVibe,
+  vibeRibbon,
 } from "@/content/vibe";
 import { useCursorReveal } from "./CursorReveal";
 
@@ -19,7 +20,7 @@ type HeroWarpProps = {
 };
 
 /** Bump when fragment logic changes so the WebGL program recompiles on HMR. */
-const WARP_SHADER_REV = 8;
+const WARP_SHADER_REV = 9;
 
 /** Layout + visual viewport — mobile chrome must never undersize the field. */
 function viewportBox() {
@@ -72,6 +73,21 @@ uniform float uViewH;
 uniform float uPageH;
 uniform vec3 uPaper;
 uniform vec3 uWash;
+uniform float uY0;
+uniform float uY1;
+uniform float uY2;
+uniform float uY3;
+uniform float uY4;
+uniform vec3 uP0;
+uniform vec3 uP1;
+uniform vec3 uP2;
+uniform vec3 uP3;
+uniform vec3 uP4;
+uniform vec3 uW0;
+uniform vec3 uW1;
+uniform vec3 uW2;
+uniform vec3 uW3;
+uniform vec3 uW4;
 uniform vec2 uCursor;
 uniform vec2 uCursorTrail;
 uniform vec2 uCursorVel;
@@ -90,6 +106,20 @@ const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 vec2 unitOr(vec2 v, vec2 fallback) {
   float len = length(v);
   return len > 0.001 ? v / len : fallback;
+}
+
+void gradeAt(float y, out vec3 paper, out vec3 wash) {
+  if (y <= uY0) { paper = uP0; wash = uW0; return; }
+  if (y >= uY4) { paper = uP4; wash = uW4; return; }
+  vec3 pa = uP0; vec3 wa = uW0; float ya = uY0;
+  vec3 pb = uP1; vec3 wb = uW1; float yb = uY1;
+  if (y > uY1) { pa = uP1; wa = uW1; ya = uY1; pb = uP2; wb = uW2; yb = uY2; }
+  if (y > uY2) { pa = uP2; wa = uW2; ya = uY2; pb = uP3; wb = uW3; yb = uY3; }
+  if (y > uY3) { pa = uP3; wa = uW3; ya = uY3; pb = uP4; wb = uW4; yb = uY4; }
+  float u = clamp((y - ya) / max(yb - ya, 1.0), 0.0, 1.0);
+  u = u * u * (3.0 - 2.0 * u);
+  paper = mix(pa, pb, u);
+  wash = mix(wa, wb, u);
 }
 
 // Period matches desktop: viewport width, or 1.6 viewports if the screen is narrow.
@@ -121,10 +151,11 @@ vec4 flowSample(float x, float pageY) {
 // divides by zero. Flipping the tangent swaps the pair exactly, which is how the
 // callers stay clear of the sign the orientation field does not carry.
 vec2 foldEnds(vec2 q, vec2 dir) {
+  vec2 frame = vec2(uRes.x, uViewH);
   vec2 way = mix(vec2(-1.0), vec2(1.0), step(0.0, dir));
   vec2 d = way * max(abs(dir), vec2(0.004));
   vec2 lo = -q / d;
-  vec2 hi = (uRes - q) / d;
+  vec2 hi = (frame - q) / d;
   float ahead = min(max(lo.x, hi.x), max(lo.y, hi.y));
   float behind = -max(min(lo.x, hi.x), min(lo.y, hi.y));
   return vec2(ahead, behind);
@@ -163,10 +194,16 @@ vec3 fuzzSample(vec2 uv, float radius) {
 void main() {
   vec2 p = vUv;
   vec2 px = p * uRes;
-  float aspect = uRes.x / max(uRes.y, 1.0);
+  float aspect = uRes.x / max(uViewH, 1.0);
+  // Page-tall canvas: fold math stays viewport-sized so baked silk matches desktop.
+  float pageMode = step(uViewH * 1.25, uRes.y);
+  vec2 foldQ = vec2(px.x, mix(px.y, uViewH * 0.5, pageMode));
 
   // Document Y of this pixel (px from top of page).
   float docY = uScroll + (1.0 - p.y) * uRes.y;
+  vec3 livePaper = uPaper;
+  vec3 liveWash = uWash;
+  if (pageMode > 0.5) gradeAt(docY, livePaper, liveWash);
   float heroH = max(uHeroH, 1.0);
   float portraitTop = uPortraitTop;
   float portraitH = max(uPortraitH, 1.0);
@@ -212,7 +249,7 @@ void main() {
 
   // Cream paper clips silk highlights to white — thin motion + lift when bright.
   // Tint 0 is nearly flat; silk returns as colour arrives.
-  float paperLum = dot(uPaper, LUMA);
+  float paperLum = dot(livePaper, LUMA);
   float paperBright = smoothstep(0.58, 0.9, paperLum);
   float tintLive = smoothstep(0.03, 0.55, uTint);
   float silkGain = mix(0.06, 1.0, tintLive) * mix(1.0, 0.45, paperBright * (1.0 - tintLive));
@@ -229,7 +266,7 @@ void main() {
   // across the frame toward this point. Reading the direction off the run rather
   // than off the tangent cancels the sign the orientation field does not carry,
   // and eases it to nothing mid-run, where neither end is nearer.
-  vec2 ends = foldEnds(px, restDir);
+  vec2 ends = foldEnds(foldQ, restDir);
   float lean = clamp((ends.x - ends.y) / 300.0, -1.0, 1.0);
   vec2 travel = restDir * lean;
 
@@ -331,7 +368,7 @@ void main() {
   float underPortrait = 0.0;
   float landingSilk = 1.0 + landing * 1.45 * besideName + underPortrait;
 
-  vec3 portrait = uPaper;
+  vec3 portrait = livePaper;
   float figure = 0.0;
   float band = 0.0;
 
@@ -430,7 +467,7 @@ void main() {
 
   // Scroll-graded field: flat on cream; folds only once tint has colour.
   // Same grade on phone and desktop — narrow only softens motion, not colour.
-  vec3 fieldCol = mix(uPaper, uWash, (mix(0.02, 0.12, tintLive) + 0.11 * trough * tintLive));
+  vec3 fieldCol = mix(livePaper, liveWash, (mix(0.02, 0.12, tintLive) + 0.11 * trough * tintLive));
   float fieldFold = mix(0.04, 0.22, tintLive) * mix(1.0, 0.45, paperBright * (1.0 - tintLive));
   fieldCol *= clamp(1.0 + fold * fieldFold * landingSilk, 0.55, mix(1.08, 1.35, tintLive));
   fieldCol *= clamp(1.0 - trough * mix(0.06, 0.22, tintLive) * landingSilk, 0.55, 1.0);
@@ -439,7 +476,7 @@ void main() {
   fieldCol += sheen * 0.03 * landingSilk * tintLive;
   fieldCol += leadBead * lineStrength * 0.045 * liftGain;
   // Soft wash lift on the cursor reveal — never toward chalk white on cream.
-  vec3 litTarget = mix(uPaper, mix(uWash, mix(uWash, uPaper, 0.55), paperBright), tintLive);
+  vec3 litTarget = mix(livePaper, mix(liveWash, mix(liveWash, livePaper, 0.55), paperBright), tintLive);
   vec3 lit = mix(fieldCol, litTarget, mix(0.12, 0.4, tintLive));
   fieldCol = mix(fieldCol, lit, reveal * mix(0.35, 1.0, tintLive));
 
@@ -683,6 +720,21 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
       pageH: gl.getUniformLocation(program, "uPageH"),
       paper: gl.getUniformLocation(program, "uPaper"),
       wash: gl.getUniformLocation(program, "uWash"),
+      y0: gl.getUniformLocation(program, "uY0"),
+      y1: gl.getUniformLocation(program, "uY1"),
+      y2: gl.getUniformLocation(program, "uY2"),
+      y3: gl.getUniformLocation(program, "uY3"),
+      y4: gl.getUniformLocation(program, "uY4"),
+      p0: gl.getUniformLocation(program, "uP0"),
+      p1: gl.getUniformLocation(program, "uP1"),
+      p2: gl.getUniformLocation(program, "uP2"),
+      p3: gl.getUniformLocation(program, "uP3"),
+      p4: gl.getUniformLocation(program, "uP4"),
+      w0: gl.getUniformLocation(program, "uW0"),
+      w1: gl.getUniformLocation(program, "uW1"),
+      w2: gl.getUniformLocation(program, "uW2"),
+      w3: gl.getUniformLocation(program, "uW3"),
+      w4: gl.getUniformLocation(program, "uW4"),
       cursor: gl.getUniformLocation(program, "uCursor"),
       cursorTrail: gl.getUniformLocation(program, "uCursorTrail"),
       cursorVel: gl.getUniformLocation(program, "uCursorVel"),
@@ -707,35 +759,36 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
     let width = 0;
     let height = 0;
     let viewH = 1;
-    let overscan = 0;
-    let drawnScroll = 0;
+    const lite = isLiteField();
+    let scrollBusyUntil = 0;
+    let lastDraw = 0;
 
-    const slipCanvas = () => {
-      const dy = Math.max(
-        -overscan,
-        Math.min(overscan, drawnScroll - window.scrollY),
-      );
-      canvas.style.transform = `translate3d(0, ${dy}px, 0)`;
+    const markScrollBusy = () => {
+      scrollBusyUntil = performance.now() + 180;
     };
 
     const resize = () => {
-      const lite = isLiteField();
-      // Phones: stay near 1× so scroll compositing is not fighting a 2× silk buffer.
-      const dpr = Math.min(window.devicePixelRatio || 1, lite ? 1.25 : 2);
       const box = viewportBox();
       const cssW = Math.max(1, Math.round(Math.max(box.w, wrap.clientWidth || 0)));
-      viewH = Math.max(1, Math.round(Math.max(box.h, wrap.clientHeight || 0)));
-      // Extra band so a compositor fling can slide the last frame instead of tearing.
-      overscan = Math.round(viewH * 0.45);
+      viewH = Math.max(1, Math.round(box.h));
+      const pageH = Math.max(
+        viewH,
+        wrap.clientHeight || 0,
+        document.documentElement.scrollHeight,
+        document.body.scrollHeight,
+      );
       width = cssW;
-      height = viewH + overscan * 2;
-      canvas.style.top = `${-overscan}px`;
-      canvas.style.height = `${height}px`;
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
+      height = lite ? Math.max(pageH, wrap.clientHeight || pageH) : viewH;
+
+      const maxR = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) || 4096;
+      const want = lite ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = Math.max(
+        0.35,
+        Math.min(want, maxR / Math.max(width, 1), maxR / Math.max(height, 1)),
+      );
+      canvas.width = Math.max(1, Math.round(width * dpr));
+      canvas.height = Math.max(1, Math.round(height * dpr));
       gl.viewport(0, 0, canvas.width, canvas.height);
-      drawnScroll = window.scrollY;
-      canvas.style.transform = "translate3d(0, 0, 0)";
     };
 
     const contextLost = (event: Event) => {
@@ -778,11 +831,15 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
         observer = new ResizeObserver(resize);
         observer.observe(document.documentElement);
         observer.observe(wrap);
+        const parent = wrap.parentElement;
+        if (parent) observer.observe(parent);
         const vv = window.visualViewport;
         vv?.addEventListener("resize", resize);
         window.addEventListener("resize", resize);
-        window.addEventListener("scroll", slipCanvas, { passive: true });
-        vv?.addEventListener("scroll", slipCanvas);
+        if (lite) {
+          window.addEventListener("scroll", markScrollBusy, { passive: true });
+          window.addEventListener("touchmove", markScrollBusy, { passive: true });
+        }
         setMode("gl");
 
         let smoothX = width * 0.5;
@@ -805,13 +862,20 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
           if (disposed) return;
           raf = requestAnimationFrame(tick);
           const now = performance.now();
+          if (lite) {
+            // Let the compositor scroll the baked field. Drawing here would stall
+            // the main thread and the silk would lag the finger again.
+            if (now < scrollBusyUntil) return;
+            if (now - lastDraw < 50) return;
+            lastDraw = now;
+          }
           const dt = Math.min(0.05, (now - lastNow) / 1000);
           lastNow = now;
           animTime += dt * (reduceMotionRef.current
             ? 0
             : silkMotionScale(silkRef.current, tintColorRef.current));
           const { heroH, pageH, portraitTop, portraitH } = scrollRef.current;
-          const scrollY = window.scrollY;
+          const scrollY = lite ? 0 : window.scrollY;
 
           const targetX = pointer.current.x;
           const targetY = pointer.current.y;
@@ -870,7 +934,7 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
 
           // Same grade as desktop CSS — no catch-up lerp (that was the colour lag).
           const tint = sampleVibeTintAt(
-            scrollY,
+            lite ? 0 : window.scrollY,
             window.innerHeight,
             getVibe().color,
           );
@@ -892,11 +956,32 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
           gl.uniform1f(u.heroH, heroH);
           gl.uniform1f(u.portraitTop, portraitTop);
           gl.uniform1f(u.portraitH, portraitH);
-          gl.uniform1f(u.scroll, scrollY - overscan);
+          gl.uniform1f(u.scroll, scrollY);
           gl.uniform1f(u.viewH, viewH);
           gl.uniform1f(u.pageH, Math.max(pageH, height));
           gl.uniform3f(u.paper, paper[0], paper[1], paper[2]);
           gl.uniform3f(u.wash, wash[0], wash[1], wash[2]);
+          if (lite) {
+            const ribbon = vibeRibbon(getVibe().color);
+            const ys = [u.y0, u.y1, u.y2, u.y3, u.y4];
+            const ps = [u.p0, u.p1, u.p2, u.p3, u.p4];
+            const ws = [u.w0, u.w1, u.w2, u.w3, u.w4];
+            ribbon.forEach((stop, i) => {
+              gl.uniform1f(ys[i], stop.y);
+              gl.uniform3f(
+                ps[i],
+                stop.paper[0] / 255,
+                stop.paper[1] / 255,
+                stop.paper[2] / 255,
+              );
+              gl.uniform3f(
+                ws[i],
+                stop.wash[0] / 255,
+                stop.wash[1] / 255,
+                stop.wash[2] / 255,
+              );
+            });
+          }
           gl.uniform2f(u.cursor, smoothX, smoothY);
           gl.uniform2f(u.cursorTrail, trailX, trailY);
           gl.uniform2f(u.cursorVel, dirX * speed, dirY * speed);
@@ -906,8 +991,6 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
           gl.uniform1f(u.motion, smoothMotion);
           gl.uniform1f(u.tint, smoothTint);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
-          drawnScroll = scrollY;
-          canvas.style.transform = "translate3d(0, 0, 0)";
         };
 
         raf = requestAnimationFrame(tick);
@@ -921,9 +1004,9 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
       cancelAnimationFrame(raf);
       observer?.disconnect();
       window.visualViewport?.removeEventListener("resize", resize);
-      window.visualViewport?.removeEventListener("scroll", slipCanvas);
       window.removeEventListener("resize", resize);
-      window.removeEventListener("scroll", slipCanvas);
+      window.removeEventListener("scroll", markScrollBusy);
+      window.removeEventListener("touchmove", markScrollBusy);
       canvas.removeEventListener("webglcontextlost", contextLost);
       if (photoTex) gl.deleteTexture(photoTex);
       if (flowTex) gl.deleteTexture(flowTex);
@@ -937,14 +1020,14 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
   return (
     <div
       ref={wrapRef}
-      className={`hero-warp pointer-events-none fixed inset-0 z-0 overflow-hidden bg-paper${
+      className={`hero-warp pointer-events-none z-0 overflow-hidden bg-paper${
         mode === "gl" ? " is-awake" : ""
       }`}
       aria-hidden={mode !== "fallback"}
     >
       <canvas
         ref={canvasRef}
-        className="hero-warp__canvas absolute left-0 w-full"
+        className="hero-warp__canvas absolute inset-0 h-full w-full"
         aria-hidden
       />
       {mode === "fallback" ? (

@@ -291,8 +291,16 @@ function HeroSinglesRow({
   const album = getAlbum(albumId);
   if (!album) return null;
 
-  // Singles preview: only shots past the stack covers (first 3).
-  const photos = album.photos.slice(3);
+  // Singles preview: shots past the stack covers (first 3).
+  // Temporary: doubles has no extras yet — reuse stack covers, with
+  // the first cover on the right (pair with align="end" below).
+  const photos =
+    albumId === "doubles" && album.photos.length <= 3
+      ? (() => {
+          const covers = album.photos.slice(0, 3);
+          return covers.length ? [...covers.slice(1), covers[0]] : [];
+        })()
+      : album.photos.slice(3);
   const shown =
     align === "start"
       ? photos.slice(0, count)
@@ -432,7 +440,7 @@ export function Hero() {
                   albumId="doubles"
                   className="hero-singles--top"
                   count={fit.singles}
-                  align="start"
+                  align="end"
                   large={fit.large}
                 />
               </div>

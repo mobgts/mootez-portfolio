@@ -33,6 +33,9 @@ const OLIVE_AT = 0.8;
 /** Slider 0 starts at 35% tint; 1 stays full. */
 const COLOR_FLOOR = 0.35;
 
+/** Tint knob caps at notch 5/6 (full olive) — warm apricot is out of reach. */
+export const COLOR_CEILING = 0.8;
+
 /** Map slider 0–1 onto the live tint range (floored at 35%). */
 export function mapVibeColor(warmth: number) {
   const t = clamp01(warmth);
@@ -65,7 +68,7 @@ function mapSilkAmount(silk: number) {
 }
 
 export type VibeState = {
-  /** 0 = clean cream, ~0.8 = studio olive, 1 = warm apricot */
+  /** 0 = clean cream … COLOR_CEILING (0.8) = studio olive (notch 5) */
   color: number;
   /** 0 = calm silk, 1 = lively silk */
   silk: number;
@@ -90,7 +93,7 @@ export function getVibe(): VibeState {
 }
 
 export function setVibeColor(value: number) {
-  const next = clamp01(value);
+  const next = Math.min(COLOR_CEILING, clamp01(value));
   if (next === state.color) return;
   state = { ...state, color: next };
   notify();
@@ -159,6 +162,26 @@ export function sampleVibeTintAt(
   const olive = sampleTintAt(scrollY, viewH, TINT_STOPS);
   const warm = sampleTintAt(scrollY, viewH, WARM_TINT_STOPS);
   return mixTintTripod(cream, olive, warm, mapVibeColor(warmth));
+}
+
+/** Section colours along the page — used to bake the silk field in document space. */
+export function vibeRibbon(warmth = state.color) {
+  const t = mapVibeColor(warmth);
+  const scrollY = typeof window !== "undefined" ? window.scrollY : 0;
+  return TINT_STOPS.map((stop, i) => {
+    const mixed = mixTintTripod(
+      { paper: CREAM_TINT_STOPS[i].paper, wash: CREAM_TINT_STOPS[i].wash },
+      { paper: TINT_STOPS[i].paper, wash: TINT_STOPS[i].wash },
+      { paper: WARM_TINT_STOPS[i].paper, wash: WARM_TINT_STOPS[i].wash },
+      t,
+    );
+    let y = i * 1200;
+    if (typeof document !== "undefined") {
+      const el = document.getElementById(stop.id);
+      if (el) y = el.getBoundingClientRect().top + scrollY;
+    }
+    return { y, paper: mixed.paper, wash: mixed.wash };
+  });
 }
 
 export function vibeAccents(warmth = state.color) {

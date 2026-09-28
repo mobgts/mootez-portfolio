@@ -271,26 +271,12 @@ export function AlbumOverlay({
     return () => window.removeEventListener("keydown", onKey);
   }, [active, current, level, onClose, open]);
 
-  const activeIndex =
-    current && active
-      ? current.photos.findIndex((photo) => photo.slug === active.slug)
-      : -1;
-
   const title =
     level === "albums"
       ? "albums"
       : current
         ? displayLabel(current.label)
         : "albums";
-
-  const subtitle =
-    level === "photo" && active
-      ? `${displayLabel(active.filename)} · ${active.year} · ${displayLabel(active.location)}${
-          activeIndex >= 0
-            ? ` · ${activeIndex + 1}/${current?.photos.length ?? 0}`
-            : ""
-        }`
-      : "";
 
   const backLabel =
     level === "albums"
@@ -326,11 +312,6 @@ export function AlbumOverlay({
             <p className="album-overlay__title">
               <span data-album-drift="left">{title}</span>
             </p>
-            {subtitle ? (
-              <p className="album-overlay__subtitle mt-1">
-                <span data-album-drift="left">{subtitle}</span>
-              </p>
-            ) : null}
           </div>
           <button
             type="button"
@@ -389,10 +370,7 @@ export function AlbumOverlay({
                         reveal={false}
                       />
                     </div>
-                    <div className="album-overlay__caption mt-2 flex items-baseline justify-between gap-2 overflow-visible px-1">
-                      <span data-album-drift>
-                        {displayLabel(photo.filename)}
-                      </span>
+                    <div className="album-overlay__caption mt-2 flex items-baseline justify-end gap-2 overflow-visible px-1">
                       <span data-album-drift>{photo.year}</span>
                     </div>
                   </button>
