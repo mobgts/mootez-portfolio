@@ -206,8 +206,8 @@ html.has-cursor-none * {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1.5rem;
-  padding: var(--site-nav-pad-y) var(--site-nav-pad-x) 1.35rem;
+  gap: 1.15rem;
+  padding: var(--site-nav-pad-y) var(--site-nav-pad-x) 1.55rem;
 }
 
 .site-nav__brand {
@@ -248,30 +248,114 @@ html.has-cursor-none * {
   min-width: 0;
 }
 
-.site-nav__links > ul {
+.site-nav__face {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 0.55rem;
+  align-items: stretch;
+  gap: 0;
+}
+
+.site-nav__face-parts,
+.site-nav__face-row,
+.site-nav__albums-row {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.site-nav__links > ul > li {
+.site-nav__face-parts {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
+  gap: 0.28rem;
+  width: min(10.5rem, 44vw);
+}
+
+.site-nav__face-row {
+  display: flex;
+  width: 100%;
+}
+
+.site-nav__face-row--eyes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+  gap: 0.95rem;
+  padding: 0;
+}
+
+.site-nav__face-eye,
+.site-nav__face-nose,
+.site-nav__face-mouth {
   will-change: transform, opacity;
+}
+
+.site-nav__face-eye {
+  display: flex;
+  min-width: 0;
+}
+
+.site-nav__face-eye--left {
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.site-nav__face-eye--right {
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+
+.site-nav__face-nose {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+}
+
+.site-nav__face-mouth {
+  width: 100%;
+  margin-top: 0.05rem;
+}
+
+/* Box the letter geometry is measured against — 100 wide by 16 tall. */
+.site-nav__face-mouth-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 100 / 16;
+}
+
+/* The words are the smile: each owns half the arc, letters set per-angle. */
+.site-nav__links .site-nav__face-smile {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: block;
+  padding: 0;
+}
+
+.site-nav__face-smile--left {
+  left: 0;
+  right: 50%;
+}
+
+.site-nav__face-smile--right {
+  left: 50%;
+  right: 0;
+}
+
+.site-nav__face-smile span {
+  position: absolute;
+  display: inline-block;
+  letter-spacing: normal;
+  white-space: pre;
 }
 
 .site-nav__links a,
 .site-nav__image-btn {
   display: inline-flex;
   align-items: baseline;
-  justify-content: flex-end;
-  gap: 0.35em;
-  padding: 0;
+  justify-content: center;
+  gap: 0.28em;
+  padding: 0.15em 0.05em;
   border: 0;
   background: none;
   color: var(--ink);
@@ -280,7 +364,7 @@ html.has-cursor-none * {
   font-weight: 500;
   letter-spacing: 0.04em;
   line-height: 1.2;
-  text-align: right;
+  text-align: center;
   text-decoration: none;
   cursor: pointer;
   transition: color 160ms ease;
@@ -332,7 +416,9 @@ html.has-cursor-none * {
 .site-nav__albums {
   display: grid;
   grid-template-rows: 0fr;
-  width: 100%;
+  width: max-content;
+  max-width: 7.5rem;
+  margin-top: 0;
   opacity: 0;
   pointer-events: none;
   transition:
@@ -343,7 +429,7 @@ html.has-cursor-none * {
 
 .site-nav__albums.is-open {
   grid-template-rows: 1fr;
-  margin-top: 0.45rem;
+  margin-top: 0.4rem;
   opacity: 1;
   pointer-events: auto;
 }
@@ -357,10 +443,8 @@ html.has-cursor-none * {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0.45rem;
-  margin: 0;
-  padding: 0 0.35rem 0 0;
-  list-style: none;
+  gap: 0.4rem;
+  padding: 0 0.15rem 0 0;
 }
 
 .site-nav__album-drift {
@@ -374,7 +458,7 @@ html.has-cursor-none * {
   background: none;
   color: var(--ink);
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.04em;
   line-height: 1.2;

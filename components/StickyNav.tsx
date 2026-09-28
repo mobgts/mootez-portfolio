@@ -34,11 +34,75 @@ type DriftSpec = {
   biasY: number;
 };
 
+function navItem(id: string) {
+  const item = site.nav.find((entry) => entry.id === id);
+  if (!item) throw new Error(`Missing nav item: ${id}`);
+  return item;
+}
+
+/**
+ * Mouth geometry. Letters ride a shallow circle so about/contact hint at a
+ * smile without announcing it. Units: x in % of mouth width (box 100 × 16).
+ */
+const SMILE = {
+  cx: 50,
+  cy: -118,
+  radius: 130,
+  maxDeg: 12,
+  boxHeight: 16,
+  wordGap: 2.6,
+};
+
+type SmileLetter = { char: string; deg: number; x: number; y: number };
+
+function placeOnSmile(char: string, slot: number, step: number): SmileLetter {
+  const deg = -SMILE.maxDeg + slot * step;
+  const rad = (deg * Math.PI) / 180;
+  return {
+    char,
+    deg,
+    x: SMILE.cx + SMILE.radius * Math.sin(rad),
+    y: SMILE.cy + SMILE.radius * Math.cos(rad),
+  };
+}
+
+/** Even angular spacing across both words, with a gap where they meet. */
+function smileLetters(left: string, right: string) {
+  const leftChars = [...left];
+  const rightChars = [...right];
+  const slots =
+    leftChars.length - 1 + SMILE.wordGap + rightChars.length - 1;
+  const step = (SMILE.maxDeg * 2) / slots;
+  const rightStart = leftChars.length - 1 + SMILE.wordGap;
+
+  return {
+    left: leftChars.map((char, i) => placeOnSmile(char, i, step)),
+    right: rightChars.map((char, i) => placeOnSmile(char, rightStart + i, step)),
+  };
+}
+
+/** Each word is absolutely placed in its own half of the mouth box. */
+function letterStyle(letter: SmileLetter, half: "left" | "right") {
+  const localX = half === "left" ? letter.x * 2 : (letter.x - 50) * 2;
+  return {
+    left: `${localX.toFixed(3)}%`,
+    top: `${((letter.y / SMILE.boxHeight) * 100).toFixed(3)}%`,
+    transform: `translate(-50%, -50%) rotate(${letter.deg.toFixed(2)}deg)`,
+  };
+}
+
 export function StickyNav() {
   const [imageOpen, setImageOpen] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
   const brandExitRef = useRef<HTMLAnchorElement>(null);
   const headerRef = useRef<HTMLElement>(null);
+
+  const image = navItem("image");
+  const sound = navItem("sound");
+  const dev = navItem("dev");
+  const about = navItem("about");
+  const contact = navItem("contact");
+  const smile = smileLetters(about.label, contact.label);
 
   // Soft wander on labels (same as desktop rail).
   useEffect(() => {
@@ -97,7 +161,7 @@ export function StickyNav() {
     };
   }, []);
 
-  // Brand exits left, nav words exit right as you leave the hero — reverse on scroll up.
+  // Brand exits left, nav face exits right as you leave the hero — reverse on scroll up.
   useEffect(() => {
     const header = headerRef.current;
     const brand = brandExitRef.current;
@@ -176,20 +240,20 @@ export function StickyNav() {
           </span>
         </a>
 
-        <nav className="site-nav__links" aria-label="Site">
-          <ul>
-            {site.nav.map((item) =>
-              item.id === "image" ? (
-                <li key={item.id} data-nav-exit-item>
+        <nav className="site-nav__links site-nav__face" aria-label="Site">
+          <ul className="site-nav__face-parts">
+            <li className="site-nav__face-eyes">
+              <ul className="site-nav__face-row site-nav__face-row--eyes">
+                <li data-nav-exit-item className="site-nav__face-eye site-nav__face-eye--left">
                   <button
                     type="button"
                     aria-expanded={imageOpen}
                     onClick={toggleImage}
-                    data-nav-origin={item.id}
+                    data-nav-origin={image.id}
                     data-rail-drift
                     className="site-nav__image-btn"
                   >
-                    <span>{item.label}</span>
+                    <span>{image.label}</span>
                     <span
                       className={
                         imageOpen
@@ -205,9 +269,7 @@ export function StickyNav() {
                   </button>
                   <div
                     className={
-                      imageOpen
-                        ? "site-nav__albums is-open"
-                        : "site-nav__albums"
+                      imageOpen ? "site-nav__albums is-open" : "site-nav__albums"
                     }
                     aria-hidden={!imageOpen}
                   >
@@ -234,18 +296,64 @@ export function StickyNav() {
                     </div>
                   </div>
                 </li>
-              ) : (
-                <li key={item.id} data-nav-exit-item>
+                <li data-nav-exit-item className="site-nav__face-eye site-nav__face-eye--right">
                   <a
-                    href={`#${item.id}`}
-                    data-nav-origin={item.id}
+                    href={`#${sound.id}`}
+                    data-nav-origin={sound.id}
                     data-rail-drift
                   >
-                    {item.label}
+                    {sound.label}
                   </a>
                 </li>
-              ),
-            )}
+              </ul>
+            </li>
+
+            <li data-nav-exit-item className="site-nav__face-nose">
+              <a
+                href={`#${dev.id}`}
+                data-nav-origin={dev.id}
+                data-rail-drift
+              >
+                {dev.label}
+              </a>
+            </li>
+
+            <li data-nav-exit-item className="site-nav__face-mouth">
+              <div className="site-nav__face-mouth-stage" data-rail-drift>
+                <a
+                  href={`#${about.id}`}
+                  data-nav-origin={about.id}
+                  aria-label={about.label}
+                  className="site-nav__face-smile site-nav__face-smile--left"
+                >
+                  {smile.left.map((letter, i) => (
+                    <span
+                      key={`${letter.char}-${i}`}
+                      style={letterStyle(letter, "left")}
+                      aria-hidden
+                    >
+                      {letter.char}
+                    </span>
+                  ))}
+                </a>
+                <a
+                  href={`#${contact.id}`}
+                  data-nav-origin={contact.id}
+                  aria-label={contact.label}
+                  className="site-nav__face-smile site-nav__face-smile--right"
+                >
+                  {smile.right.map((letter, i) => (
+                    <span
+                      key={`${letter.char}-${i}`}
+                      style={letterStyle(letter, "right")}
+                      aria-hidden
+                    >
+                      {letter.char}
+                    </span>
+                  ))}
+                </a>
+              </div>
+            </li>
           </ul>
         </nav>
       </div>

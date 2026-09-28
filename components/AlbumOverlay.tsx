@@ -272,17 +272,13 @@ export function AlbumOverlay({
         : "albums";
 
   const subtitle =
-    level === "albums"
-      ? ""
-      : level === "photo" && active
-        ? `${displayLabel(active.filename)} · ${active.year} · ${displayLabel(active.location)}${
-            activeIndex >= 0
-              ? ` · ${activeIndex + 1}/${current?.photos.length ?? 0}`
-              : ""
-          }`
-        : current
-          ? `${current.photos.length} photographs · choose a photograph`
-          : "";
+    level === "photo" && active
+      ? `${displayLabel(active.filename)} · ${active.year} · ${displayLabel(active.location)}${
+          activeIndex >= 0
+            ? ` · ${activeIndex + 1}/${current?.photos.length ?? 0}`
+            : ""
+        }`
+      : "";
 
   const backLabel =
     level === "albums"

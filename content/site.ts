@@ -11,7 +11,7 @@ export const site = {
     lng: "7°05′59″ E",
   },
   location: "Bonn, Germany",
-  email: "yowassup@mootez.com",
+  email: "boughattas.mootez@hotmail.com",
   linkedin: "https://www.linkedin.com/in/mootez-boughattas-2371261a8",
   nav: [
     { id: "image", label: "image" },
