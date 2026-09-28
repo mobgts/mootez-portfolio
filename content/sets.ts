@@ -8,7 +8,7 @@ export const sets: Set[] = [
     year: "'17",
     venue: "Aquaregia",
     duration: "7:01",
-    cover: "/photos/aurora-centralis.jpg",
+    cover: "/photos/sets/aurora-centralis.jpg",
     embedUrl: "https://soundcloud.com/747/747-aurora-centralis",
   },
 ];
