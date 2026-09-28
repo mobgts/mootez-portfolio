@@ -30,7 +30,7 @@ export function StoryShell({ children }: { children: ReactNode }) {
         maskSrc={heroPhoto.maskSrc}
         alt={heroPhoto.alt}
       />
-      <div className="relative z-10">{children}</div>
+      <div className="story-page__content relative z-10">{children}</div>
     </div>
   );
 }

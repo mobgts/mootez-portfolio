@@ -1,0 +1,100 @@
+[
+  {
+    "tid": "cd624d75-661c-43dc-aa08-aff2cc01448b",
+    "line": 34,
+    "tool": "StrReplace",
+    "old": ".story-about .text-muted {\n  color: color-mix(in srgb, var(--ink) 55%, transparent);\n}\n\n/* Soft rectangular falloff — center stays sharp, rim shows the silk displace. */",
+    "neu": ".story-about .text-muted {\n  color: color-mix(in srgb, var(--ink) 55%, transparent);\n}\n\n.about-silk-arrive {\n  transform: translate3d(0, 36px, 0);\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .about-silk-arrive {\n    opacity: 1 !important;\n    transform: none !important;\n    filter: none !important;\n  }\n}\n\n/* Soft rectangular falloff — center stays sharp, rim shows the silk displace. */"
+  },
+  {
+    "tid": "cd624d75-661c-43dc-aa08-aff2cc01448b",
+    "line": 36,
+    "tool": "StrReplace",
+    "old": ".story-about .text-muted {\n  color: color-mix(in srgb, var(--ink) 55%, transparent);\n}\n\n/* Rim-only reveal of the displaced copy — center stays the sharp base image. */",
+    "neu": ".story-about .text-muted {\n  color: color-mix(in srgb, var(--ink) 55%, transparent);\n}\n\n.about-silk-arrive {\n  transform: translate3d(0, 36px, 0);\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .about-silk-arrive {\n    opacity: 1 !important;\n    transform: none !important;\n    filter: none !important;\n  }\n}\n\n/* Rim-only reveal of the displaced copy — center stays the sharp base image. */"
+  },
+  {
+    "tid": "cd624d75-661c-43dc-aa08-aff2cc01448b",
+    "line": 42,
+    "tool": "StrReplace",
+    "old": ".about-silk-arrive {\n  transform: translate3d(0, 36px, 0);\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .about-silk-arrive {\n    opacity: 1 !important;\n    transform: none !important;\n    filter: none !important;\n  }\n}",
+    "neu": ".about-silk-arrive,\n.silk-arrive {\n  transform: translate3d(0, 36px, 0);\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .about-silk-arrive,\n  .silk-arrive {\n    opacity: 1 !important;\n    transform: none !important;\n    filter: none !important;\n  }\n}"
+  },
+  {
+    "tid": "bc485b87-5074-4e28-9be0-4f7e83521e34",
+    "line": 32,
+    "tool": "StrReplace",
+    "old": ".studio-rail [data-rail-drift] {\n  transform: translate3d(0, 0, 0);\n  will-change: transform;\n}",
+    "neu": ".studio-rail [data-rail-drift] {\n  transform: translate3d(0, 0, 0);\n  will-change: transform;\n}\n\n.from-nav-mark__fly {\n  margin: 0;\n  color: var(--olive-deep);\n  font-size: 13px;\n  font-weight: 500;\n  letter-spacing: 0.08em;\n  line-height: 1.2;\n  transform-origin: center center;\n  will-change: transform, opacity, filter;\n  pointer-events: none;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .from-nav-mark__fly {\n    will-change: auto;\n    filter: none !important;\n    opacity: 1 !important;\n    transform: none !important;\n  }\n}"
+  },
+  {
+    "tid": "bc485b87-5074-4e28-9be0-4f7e83521e34",
+    "line": 54,
+    "tool": "StrReplace",
+    "old": ".from-nav-mark__fly {\n  margin: 0;\n  color: var(--olive-deep);\n  font-size: 13px;\n  font-weight: 500;\n  letter-spacing: 0.08em;\n  line-height: 1.2;\n  transform-origin: center center;\n  will-change: transform, opacity, filter;\n  pointer-events: none;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .from-nav-mark__fly {\n    will-change: auto;\n    filter: none !important;\n    opacity: 1 !important;\n    transform: none !important;\n  }\n}",
+    "neu": ".from-nav-mark__fly {\n  margin: 0;\n  color: var(--olive-deep);\n  font-size: 13px;\n  font-weight: 500;\n  letter-spacing: 0.08em;\n  line-height: 1.2;\n  width: max-content;\n  transform-origin: left top;\n  will-change: transform, opacity;\n  pointer-events: none;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .from-nav-mark__fly {\n    will-change: auto;\n    opacity: 1 !important;\n    transform: none !important;\n  }\n}"
+  },
+  {
+    "tid": "c31708af-2ee1-40f7-9d45-97977f749e96",
+    "line": 32,
+    "tool": "StrReplace",
+    "old": "@media (prefers-reduced-motion: reduce) {\n  .about-silk-arrive,\n  .silk-arrive {\n    opacity: 1 !important;\n    transform: none !important;\n    filter: none !important;\n  }\n}\n\n/* About portrait canvas fills the frame; rim warp is done in AboutPhoto.tsx. */\n.about-photo canvas {\n  display: block;\n}\n\nhtml.has-cursor-none,",
+    "neu": "@media (prefers-reduced-motion: reduce) {\n  .about-silk-arrive,\n  .silk-arrive {\n    opacity: 1 !important;\n    transform: none !important;\n    filter: none !important;\n  }\n}\n\nhtml.has-cursor-none,"
+  },
+  {
+    "tid": "c31708af-2ee1-40f7-9d45-97977f749e96",
+    "line": 38,
+    "tool": "StrReplace",
+    "old": "@media (prefers-reduced-motion: reduce) {\n  .about-silk-arrive,\n  .silk-arrive {\n    opacity: 1 !important;\n    transform: none !important;\n    filter: none !important;\n  }\n}\n\nhtml.has-cursor-none,",
+    "neu": "@media (prefers-reduced-motion: reduce) {\n  .about-silk-arrive,\n  .silk-arrive {\n    opacity: 1 !important;\n    transform: none !important;\n    filter: none !important;\n  }\n}\n\n/* Soft rectangular rim — all four edges ripple; center stays the sharp base. */\n.about-photo__edge {\n  -webkit-mask-image:\n    linear-gradient(to right, #000 0%, transparent 18%, transparent 82%, #000 100%),\n    linear-gradient(to bottom, #000 0%, transparent 16%, transparent 84%, #000 100%);\n  mask-image:\n    linear-gradient(to right, #000 0%, transparent 18%, transparent 82%, #000 100%),\n    linear-gradient(to bottom, #000 0%, transparent 16%, transparent 84%, #000 100%);\n  -webkit-mask-composite: source-over;\n  mask-composite: add;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .about-photo__edge {\n    display: none;\n  }\n}\n\nhtml.has-cursor-none,"
+  },
+  {
+    "tid": "ac8a3fd1-3661-4b62-85da-7dbc37170cd4",
+    "line": 31,
+    "tool": "StrReplace",
+    "old": ".from-nav-mark__fly {\n  margin: 0;\n  color: var(--olive-deep);\n  font-size: 13px;\n  font-weight: 500;\n  letter-spacing: 0.08em;\n  line-height: 1.2;\n  width: max-content;\n  transform-origin: left top;\n  will-change: transform, opacity;\n  pointer-events: none;\n}",
+    "neu": ".from-nav-mark__fly {\n  margin: 0;\n  color: var(--olive-deep);\n  font-size: 13px;\n  font-weight: 500;\n  letter-spacing: 0.08em;\n  line-height: 1.2;\n  width: max-content;\n  transform-origin: left top;\n  will-change: transform, opacity;\n  pointer-events: none;\n}\n\n.from-nav-mark__fly--action {\n  pointer-events: auto;\n  cursor: pointer;\n  border: 0;\n  background: transparent;\n  padding: 0;\n  font: inherit;\n  color: inherit;\n  letter-spacing: inherit;\n  text-align: left;\n  transition: color 160ms ease;\n}\n\n.from-nav-mark__fly--action:hover,\n.from-nav-mark__fly--action:focus-visible {\n  color: var(--ink);\n  outline: none;\n}"
+  },
+  {
+    "tid": "ac8a3fd1-3661-4b62-85da-7dbc37170cd4",
+    "line": 41,
+    "tool": "StrReplace",
+    "old": ".from-nav-mark__fly {\n  margin: 0;\n  color: var(--olive-deep);\n  font-size: 13px;\n  font-weight: 500;\n  letter-spacing: 0.08em;\n  line-height: 1.2;\n  width: max-content;\n  transform-origin: left top;\n  will-change: transform, opacity;\n  pointer-events: none;\n}\n\n.from-nav-mark__fly--action {\n  pointer-events: auto;\n  cursor: pointer;\n  border: 0;\n  background: transparent;\n  padding: 0;\n  font: inherit;\n  color: inherit;\n  letter-spacing: inherit;\n  text-align: left;\n  transition: color 160ms ease;\n}\n\n.from-nav-mark__fly--action:hover,\n.from-nav-mark__fly--action:focus-visible {\n  color: var(--ink);\n  outline: none;\n}",
+    "neu": ".from-nav-mark__fly {\n  margin: 0;\n  color: var(--olive-deep);\n  font-size: 13px;\n  font-weight: 500;\n  letter-spacing: 0.08em;\n  line-height: 1.2;\n  width: max-content;\n  transform-origin: left top;\n  will-change: transform, opacity;\n  pointer-events: none;\n}\n\n.from-nav-mark__fly--action {\n  pointer-events: auto;\n  cursor: pointer;\n}\n\n.from-nav-mark__fly--action:focus-visible {\n  outline: 1px solid color-mix(in srgb, var(--olive-deep) 45%, transparent);\n  outline-offset: 4px;\n}"
+  },
+  {
+    "tid": "ac8a3fd1-3661-4b62-85da-7dbc37170cd4",
+    "line": 58,
+    "tool": "StrReplace",
+    "old": ".from-nav-mark__fly--action:focus-visible {\n  outline: 1px solid color-mix(in srgb, var(--olive-deep) 45%, transparent);\n  outline-offset: 4px;\n}",
+    "neu": ".from-nav-mark__fly--action:focus-visible {\n  outline: 1px solid color-mix(in srgb, var(--olive-deep) 45%, transparent);\n  outline-offset: 4px;\n}\n\n.from-nav-mark__extra {\n  margin: 0;\n  color: var(--muted);\n  font-size: 11px;\n  font-weight: 500;\n  letter-spacing: 0.06em;\n  line-height: 1.2;\n  white-space: nowrap;\n  opacity: 0;\n  will-change: transform, opacity;\n  pointer-events: none;\n}"
+  },
+  {
+    "tid": "ac8a3fd1-3661-4b62-85da-7dbc37170cd4",
+    "line": 58,
+    "tool": "StrReplace",
+    "old": "@media (prefers-reduced-motion: reduce) {\n  .from-nav-mark__fly {\n    will-change: auto;\n    opacity: 1 !important;\n    transform: none !important;\n  }\n}",
+    "neu": "@media (prefers-reduced-motion: reduce) {\n  .from-nav-mark__fly {\n    will-change: auto;\n    opacity: 1 !important;\n    transform: none !important;\n  }\n\n  .from-nav-mark__extra {\n    will-change: auto;\n    opacity: 1 !important;\n    transform: none !important;\n  }\n}"
+  },
+  {
+    "tid": "ac8a3fd1-3661-4b62-85da-7dbc37170cd4",
+    "line": 68,
+    "tool": "StrReplace",
+    "old": ".from-nav-mark__extra {\n  margin: 0;\n  color: var(--muted);\n  font-size: 11px;\n  font-weight: 500;\n  letter-spacing: 0.06em;\n  line-height: 1.2;\n  white-space: nowrap;\n  opacity: 0;\n  will-change: transform, opacity;\n  pointer-events: none;\n}",
+    "neu": ".from-nav-mark__extra {\n  margin: 0;\n  color: var(--muted);\n  font-size: 11px;\n  font-weight: 500;\n  letter-spacing: 0.06em;\n  line-height: 1.2;\n  white-space: nowrap;\n  pointer-events: none;\n  will-change: transform, opacity;\n  animation: from-nav-mark-extra-in 700ms cubic-bezier(0.22, 1, 0.36, 1) both;\n  animation-delay: 180ms;\n}\n\n@keyframes from-nav-mark-extra-in {\n  from {\n    opacity: 0;\n    transform: translate3d(0, 6px, 0);\n  }\n  to {\n    opacity: 1;\n    transform: translate3d(0, 0, 0);\n  }\n}"
+  },
+  {
+    "tid": "ac8a3fd1-3661-4b62-85da-7dbc37170cd4",
+    "line": 69,
+    "tool": "StrReplace",
+    "old": "@media (prefers-reduced-motion: reduce) {\n  .from-nav-mark__fly {\n    will-change: auto;\n    opacity: 1 !important;\n    transform: none !important;\n  }\n\n  .from-nav-mark__extra {\n    will-change: auto;\n    opacity: 1 !important;\n    transform: none !important;\n  }\n}",
+    "neu": "@media (prefers-reduced-motion: reduce) {\n  .from-nav-mark__fly {\n    will-change: auto;\n    opacity: 1 !important;\n    transform: none !important;\n  }\n\n  .from-nav-mark__extra {\n    will-change: auto;\n    animation: none;\n    opacity: 1 !important;\n    transform: none !important;\n  }\n}"
+  },
+  {
+    "tid": "068075eb-10ee-429b-9793-4a3dbe555340",
+    "line": 9,
+    "tool": "StrReplace",
+    "old": ".about-silk-arrive,\n.silk-arrive {\n  transform: translate3d(0, 36px, 0);\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .about-silk-arrive,\n  .silk-arrive {\n    opacity: 1 !important;\n    transform: none !important;\n    filter: none !important;\n  }\n}",
+    "neu": ".about-silk-arrive,\n.silk-arrive {\n  transform: translate3d(0, 36px, 0);\n}\n\n.silk-arrive--still {\n  transform: none;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .about-silk-arrive,\n  .silk-arrive {\n    opacity: 1 !important;\n    transform: none !important;\n    filter: none !important;\n  }\n}"
+  }
+]

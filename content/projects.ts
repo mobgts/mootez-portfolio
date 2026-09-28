@@ -5,9 +5,9 @@ export const projects: Project[] = [
     slug: "co-erasmus",
     title: "Co-Erasmus",
     year: "'26",
-    role: "Product · co-founder",
+    role: "co-founder · design · build",
     summary:
-      "Peer-to-peer housing for Erasmus students: list the room you leave, find the one you need, talk before you commit. No fees. Built with Ahmed Mahouachi from a bachelor thesis into a live platform, now in partnership with ESN Paris, ESN Bonn, and ESN Aachen.",
+      "We're building a peer-to-peer marketplace for verified Erasmus students while they're on exchange. They can sublet, rent, or swap rooms directly with each other, no landlords or agencies as middlemen.\n\nWe're aiming to make student housing fairer and more inclusive.",
     url: "https://co-erasmus.eu/",
     preview: true,
     embedQuery: "consent=necessary",
@@ -16,19 +16,18 @@ export const projects: Project[] = [
     slug: "portfolio",
     title: "Portfolio",
     year: "'26",
-    role: "Design · build",
+    role: "design · build",
     summary:
-      "This site — image, sound, and products in one place. A living studio rather than a static CV, built to hold the work and grow with it.",
+      "This is it, duh.\n\nThis is v1. The plan was to get the structure in place first, and I'll keep adding work. For now, the whole site feels more techy than I actually am. I've been thinking about a watery theme, but we'll see.\n\nI also wanted the portfolio to feel like one connected story. I'll keep building on that until it feels like a single immersive experience rather than a bunch of separate blocks.",
     url: "/",
     preview: true,
     embedQuery: "embed=1",
   },
   {
-    slug: "project-003",
-    title: "Project 003",
-    year: "'—",
-    role: "Placeholder",
-    summary: "Another slot. Same fields as Co-Erasmus — keep the writing short.",
+    slug: "my-section",
+    title: "MySection",
+    summary:
+      "A native event management app that makes signing up for ESN events easy. Built for sections that don't have a system yet, with integrations for the ticketing and management tools they already use.",
     placeholder: true,
   },
 ];

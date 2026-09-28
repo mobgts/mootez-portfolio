@@ -26,14 +26,16 @@ export type Set = {
   year: string;
   venue: string;
   cover: string;
+  /** Display duration, e.g. "7:01". */
+  duration?: string;
   embedUrl?: string;
 };
 
 export type Project = {
   slug: string;
   title: string;
-  year: string;
-  role: string;
+  year?: string;
+  role?: string;
   summary: string;
   url?: string;
   /** When true, show project intro first; "See it" loads the live embed. */

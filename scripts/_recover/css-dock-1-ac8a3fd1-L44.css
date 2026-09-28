@@ -1,0 +1,40 @@
+/* OLD */
+.project-browser--dock-exit,
+.project-browser--dock-enter {
+  pointer-events: none;
+  transition: none;
+  transform-origin: center center;
+  will-change: transform, opacity, filter;
+  z-index: 2;
+}
+
+.project-browser--dock-exit {
+  animation: project-browser-dock-out 720ms cubic-bezier(0.37, 0, 0.2, 1) both;
+}
+
+.project-browser--dock-enter {
+  animation: project-browser-dock-in 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+/* NEW */
+.project-browser--dock-exit,
+.project-browser--dock-enter {
+  pointer-events: none;
+  transition: none;
+  transform-origin: center center;
+  will-change: transform, opacity, filter;
+  z-index: 2;
+}
+
+.project-browser--dock-pending {
+  opacity: 0;
+  pointer-events: none;
+  transition: none;
+}
+
+.project-browser--dock-exit {
+  animation: project-browser-dock-out 720ms cubic-bezier(0.37, 0, 0.2, 1) both;
+}
+
+.project-browser--dock-enter {
+  animation: project-browser-dock-in 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}

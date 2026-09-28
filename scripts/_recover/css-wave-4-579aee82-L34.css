@@ -1,0 +1,53 @@
+.sound-player__embed-clip {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  flex: 1;
+  width: 100%;
+  height: 56px;
+  border-radius: 8px;
+}
+
+.sound-player__wave-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  min-height: 0;
+  padding: 0.35rem 0.15rem 0.15rem;
+}
+
+.sound-player__wave-play {
+  display: grid;
+  place-items: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 999px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  cursor: pointer;
+  transition: background-color 0.25s ease, transform 0.2s ease;
+}
+
+.sound-player__wave-play:hover {
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
+}
+
+.sound-player__wave-play:active {
+  transform: scale(0.96);
+}
+
+.sound-player__embed {
+  display: block;
+  /* Pull left/up so SoundCloud’s own play + title stay clipped out. */
+  width: calc(100% + 58px);
+  height: 120px;
+  margin-top: -62px;
+  margin-left: -52px;
+  border: 0;
+  background: transparent;
+  /* SoundCloud’s iframe is white; multiply knocks that out on paper. */
+  mix-blend-mode: multiply;
+}

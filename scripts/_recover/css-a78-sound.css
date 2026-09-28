@@ -1,0 +1,291 @@
+/* Sound mix player card */
+.sound-player {
+  width: min(100%, 36rem);
+  background: color-mix(in srgb, color-mix(in srgb, var(--paper) 92%, var(--ink)) 28%, transparent);
+  backdrop-filter: blur(8px) saturate(1.05);
+  -webkit-backdrop-filter: blur(8px) saturate(1.05);
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--ink) 6%, transparent);
+  padding: 0.65em 1.5em 1.4em;
+  border-radius: 18px;
+  margin: 1em;
+}
+
+.sound-player__header {
+  display: flex;
+  align-items: flex-start;
+  margin: 0.35em 1em 0.75em;
+}
+
+.sound-player__cloud {
+  width: 50px;
+  height: 50px;
+  margin-right: 0.6em;
+  flex-shrink: 0;
+}
+
+.sound-player__copy {
+  min-width: 0;
+  align-self: center;
+}
+
+.sound-player__heading {
+  margin: 0;
+  color: color-mix(in srgb, var(--ink) 88%, transparent);
+  font-size: 0.95em;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.sound-player__subhead {
+  margin: 0.2em 0 0;
+  color: color-mix(in srgb, var(--ink) 58%, transparent);
+  font-size: 0.78em;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.sound-player__track {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.sound-player__row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  min-height: 3.5rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 10px;
+  transition: background-color 0.35s ease;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  color: inherit;
+}
+
+.sound-player__row:hover {
+  cursor: pointer;
+  background-color: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.sound-player__cover {
+  position: relative;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+  background-color: color-mix(in srgb, var(--ink) 8%, var(--paper));
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 0 0 0 transparent;
+  transition:
+    width 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sound-player__track.is-open .sound-player__cover {
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 10px;
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--ink) 14%, transparent);
+}
+
+.sound-player__song {
+  position: relative;
+  color: var(--ink);
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.12em;
+}
+
+.sound-player__name {
+  margin: 0;
+  font-size: 0.95em;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sound-player__artist {
+  margin: 0;
+  font-size: 0.68em;
+  color: color-mix(in srgb, var(--ink) 62%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition:
+    opacity 0.3s ease,
+    max-height 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    margin 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  max-height: 1.4em;
+}
+
+.sound-player__track.is-open .sound-player__artist {
+  opacity: 0;
+  max-height: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+.sound-player__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35em 0.75em;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transform: translateY(0.35em);
+  font-size: 0.68em;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--ink) 58%, transparent);
+  transition:
+    max-height 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.18s,
+    opacity 0.45s ease 0.22s,
+    transform 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.18s;
+}
+
+.sound-player__meta span:not(:last-child)::after {
+  content: "·";
+  margin-left: 0.75em;
+  opacity: 0.55;
+}
+
+.sound-player__track.is-open .sound-player__meta {
+  max-height: 2.5em;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.sound-player__eq {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.4rem;
+  flex-shrink: 0;
+}
+
+.sound-player__bar {
+  width: 2px;
+  height: 100%;
+  background-color: #ff8800;
+  animation: sound-player-eq 1s infinite;
+  border-radius: 5px;
+  margin: 0 0.1em;
+}
+
+.sound-player__bar:nth-child(1) {
+  animation-delay: 0.2s;
+}
+
+.sound-player__bar:nth-child(2) {
+  animation-delay: 0.4s;
+}
+
+.sound-player__bar:nth-child(3) {
+  animation-delay: 0.6s;
+}
+
+.sound-player__play {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  color: var(--ink);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.sound-player__play-icon {
+  display: block;
+  margin-left: 1px;
+}
+
+.sound-player__stage {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  margin: 0 0.35em;
+  transition:
+    grid-template-rows 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.12s,
+    opacity 0.4s ease 0.2s,
+    margin 0.45s ease;
+}
+
+.sound-player__track.is-open .sound-player__stage {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  margin: 0.15em 0.35em 0.35em;
+}
+
+.sound-player__embed-clip {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  width: 100%;
+  height: 72px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--paper) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+}
+
+.sound-player__embed {
+  display: block;
+  width: 100%;
+  height: 120px;
+  margin-top: -46px;
+  border: 0;
+  background: transparent;
+  /* SoundCloud’s iframe is white; multiply knocks that out on paper. */
+  mix-blend-mode: multiply;
+}
+
+@media (max-width: 520px) {
+  .sound-player__track.is-open .sound-player__cover {
+    width: 4.5rem;
+    height: 4.5rem;
+  }
+}
+
+@keyframes sound-player-eq {
+  0% {
+    height: 0.2em;
+  }
+
+  25% {
+    height: 0.7em;
+  }
+
+  50% {
+    height: 1.5em;
+  }
+
+  100% {
+    height: 0.2em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sound-player__bar {
+    animation: none;
+    height: 0.9em;
+  }
+
+  .sound-player__cover,
+  .sound-player__artist,
+  .sound-player__meta,
+  .sound-player__stage {
+    transition: none;
+  }
+}

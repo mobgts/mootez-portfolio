@@ -88,5 +88,5 @@ export const heroPhoto = {
   flowSrc: "/photos/warp-flow.webp",
   bleedSrc: "/photos/hero-warp-bleed.jpg",
   maskSrc: "/photos/hero-warp-mask.png",
-  alt: "Mootez Boughattas, warm-lit portrait pulled through a warped surface",
+  alt: "Mootez Boughattas in a weathered boat on a grassy hillside under a storm sky",
 };

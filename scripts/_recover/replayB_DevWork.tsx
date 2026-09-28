@@ -9,10 +9,10 @@ import { SilkArrive, useSilkDrive } from "./AboutSilk";
 
 /** Desktop layout width so Co-Erasmus renders at ~100% desktop, then scales into the card. */
 const DESKTOP_WIDTH = 1280;
-const OPEN_TAB_PREFIX = "say-hi";
-const OPEN_TAB_TITLE = "Say hi!";
-const MAX_SAY_HI_TABS = 4;
+const OPEN_TAB_SLUG = "open-for-projects";
+const OPEN_TAB_TITLE = "New project";
 const TOAST_MS = 1800;
+const CHROME_MS = 320;
 const DOCK_MS = 720;
 
 type ChromePhase =
@@ -22,10 +22,6 @@ type ChromePhase =
   | "closed"
   | "opening"
   | "restoring";
-
-function isSayHiTab(slug: string) {
-  return slug.startsWith(`${OPEN_TAB_PREFIX}-`);
-}
 
 function setDockVars(browser: HTMLElement, mark: HTMLElement) {
   const from = browser.getBoundingClientRect();
@@ -156,8 +152,7 @@ function ProjectFrame({
 export function DevWork() {
   const [active, setActive] = useState(projects[0]?.slug ?? "");
   const [liveSlugs, setLiveSlugs] = useState<Record<string, boolean>>({});
-  const [sayHiTabs, setSayHiTabs] = useState<string[]>([`${OPEN_TAB_PREFIX}-1`]);
-  const sayHiSeq = useRef(1);
+  const [openTabAdded, setOpenTabAdded] = useState(false);
   const [inEmbed, setInEmbed] = useState(false);
   const [chromePhase, setChromePhase] = useState<ChromePhase>("open");
   const [expanded, setExpanded] = useState(false);
@@ -171,7 +166,7 @@ export function DevWork() {
   const chromeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const drive = useSilkDrive(sectionRef);
-  const isOpenTab = isSayHiTab(active);
+  const isOpenTab = active === OPEN_TAB_SLUG;
   const project = isOpenTab
     ? null
     : (projects.find((p) => p.slug === active) ?? projects[0]);
@@ -208,46 +203,6 @@ export function DevWork() {
     };
   }, [menuOpen]);
 
-  // Same soft wander as the left-rail nav labels.
-  useEffect(() => {
-    const browser = browserRef.current;
-    if (!browser || chromePhase === "closed") return;
-
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (reduce.matches) return;
-
-    const el = browser.querySelector<HTMLElement>(".project-browser__see-it");
-    if (!el) return;
-
-    const ampX = 4.2;
-    const ampY = 3.2;
-    const ampR = 0.7;
-    const speedX = 0.00038;
-    const speedY = 0.0003;
-    const speedR = 0.00024;
-    const phaseX = 2.1;
-    const phaseY = 3.4;
-    const phaseR = 1.7;
-
-    let raf = 0;
-    const driftStart = performance.now();
-    const tick = (now: number) => {
-      const gain = Math.min(1, Math.max(0, (now - driftStart - 400) / 900));
-      const ease = 1 - Math.pow(1 - gain, 3);
-      const x = Math.sin(now * speedX + phaseX) * ampX * ease;
-      const y = Math.cos(now * speedY + phaseY) * ampY * ease;
-      const r = Math.sin(now * speedR + phaseR) * ampR * ease;
-      el.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) rotate(${r.toFixed(3)}deg)`;
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      el.style.transform = "";
-    };
-  }, [active, liveSlugs, chromePhase, isOpenTab]);
-
   if (!isOpenTab && !project) return null;
 
   const selfEmbedBlocked =
@@ -266,24 +221,18 @@ export function DevWork() {
     : showIntro
       ? `${hostFromUrl(project!.url)} · intro`
       : hostFromUrl(project!.url);
-  const starKey = isOpenTab ? active : (project?.slug ?? "");
+  const starKey = isOpenTab ? OPEN_TAB_SLUG : (project?.slug ?? "");
   const isStarred = Boolean(starKey && starred[starKey]);
 
   const openAvailabilityTab = () => {
-    if (sayHiTabs.length >= MAX_SAY_HI_TABS) return;
-    sayHiSeq.current += 1;
-    const id = `${OPEN_TAB_PREFIX}-${sayHiSeq.current}`;
-    setSayHiTabs((prev) => [...prev, id]);
-    setActive(id);
+    setOpenTabAdded(true);
+    setActive(OPEN_TAB_SLUG);
     setMenuOpen(false);
   };
 
-  const closeAvailabilityTab = (id: string) => {
-    const remaining = sayHiTabs.filter((tab) => tab !== id);
-    setSayHiTabs(remaining);
-    if (active === id) {
-      setActive(remaining[remaining.length - 1] ?? projects[0]?.slug ?? "");
-    }
+  const closeAvailabilityTab = () => {
+    setOpenTabAdded(false);
+    setActive(projects[0]?.slug ?? "");
   };
 
   const showToast = (message: string) => {
@@ -293,6 +242,17 @@ export function DevWork() {
       setToast(null);
       toastTimer.current = null;
     }, TOAST_MS);
+  };
+
+  const closeChrome = () => {
+    if (chromePhase !== "open") return;
+    setMenuOpen(false);
+    setChromePhase("closing");
+    if (chromeTimer.current) clearTimeout(chromeTimer.current);
+    chromeTimer.current = setTimeout(() => {
+      setChromePhase("closed");
+      chromeTimer.current = null;
+    }, CHROME_MS);
   };
 
   const minimizeChrome = () => {
@@ -389,6 +349,7 @@ export function DevWork() {
       <SilkArrive
         drive={drive}
         strength={1.3}
+        still
         className="project-browser__stage"
       >
         {showFolder ? (
@@ -454,43 +415,38 @@ export function DevWork() {
                   );
                 })}
 
-                {sayHiTabs.map((id) => {
-                  const selected = active === id;
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      role="tab"
-                      aria-selected={selected}
-                      className={
-                        selected
-                          ? "project-browser__tab project-browser__tab--open"
-                          : "project-browser__tab"
-                      }
-                      onClick={() => setActive(id)}
+                {openTabAdded ? (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={isOpenTab}
+                    className={
+                      isOpenTab
+                        ? "project-browser__tab project-browser__tab--open"
+                        : "project-browser__tab"
+                    }
+                    onClick={() => setActive(OPEN_TAB_SLUG)}
+                  >
+                    <span className="project-browser__tab-label">
+                      {OPEN_TAB_TITLE}
+                    </span>
+                    <span
+                      className="project-browser__close-tab"
+                      role="presentation"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        closeAvailabilityTab();
+                      }}
                     >
-                      <span className="project-browser__tab-label">
-                        {OPEN_TAB_TITLE}
-                      </span>
-                      <span
-                        className="project-browser__close-tab"
-                        role="presentation"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          closeAvailabilityTab(id);
-                        }}
-                      >
-                        ×
-                      </span>
-                    </button>
-                  );
-                })}
+                      ×
+                    </span>
+                  </button>
+                ) : null}
 
                 <button
                   type="button"
                   className="project-browser__new-tab"
-                  aria-label="Open Say hi! tab"
-                  disabled={sayHiTabs.length >= MAX_SAY_HI_TABS}
+                  aria-label="Open for new projects"
                   onClick={openAvailabilityTab}
                 >
                   +
@@ -516,8 +472,8 @@ export function DevWork() {
                 <button
                   type="button"
                   className="project-browser__window-close"
-                  aria-label="Hide to Dev"
-                  onClick={minimizeChrome}
+                  aria-label="Close to projects.folder"
+                  onClick={closeChrome}
                 >
                   ×
                 </button>
@@ -640,10 +596,13 @@ export function DevWork() {
             >
               {isOpenTab ? (
                 <>
-                  <h3 className="project-browser__title">Open to projects :)</h3>
+                  <p className="project-browser__meta">
+                    Available · {site.year}
+                  </p>
+                  <h3 className="project-browser__title">Open for projects</h3>
                   <p className="project-browser__summary">
-                    Product design, development and creative direction. You
-                    know where to click.
+                    Looking for a product partner, a build, or something between
+                    image and code. Say what you need — I&apos;m open.
                   </p>
                   <a
                     href={`mailto:${site.email}?subject=New%20project`}
@@ -671,11 +630,9 @@ export function DevWork() {
                 </>
               ) : (
                 <>
-                  {(project!.role || project!.year) && (
-                    <p className="project-browser__meta">
-                      {[project!.role, project!.year].filter(Boolean).join(" · ")}
-                    </p>
-                  )}
+                  <p className="project-browser__meta">
+                    {project!.role} · {project!.year}
+                  </p>
                   <h3 className="project-browser__title">{project!.title}</h3>
                   <p className="project-browser__summary">{project!.summary}</p>
                   {selfEmbedBlocked ? (
@@ -693,10 +650,10 @@ export function DevWork() {
                         }))
                       }
                     >
-                      Check it out!
+                      Check it out
                     </button>
                   ) : project!.placeholder ? (
-                    <p className="project-browser__soon">Coming soon :)</p>
+                    <p className="project-browser__soon">Coming soon</p>
                   ) : null}
                 </>
               )}

@@ -2,11 +2,13 @@ import type { Set } from "./types";
 
 export const sets: Set[] = [
   {
-    slug: "set-001",
-    filename: "SET_001_MIX",
-    title: "Late room",
-    year: "'25",
-    venue: "Bonn · placeholder",
-    cover: "/photos/img-005.jpg",
+    slug: "aurora-centralis",
+    filename: "747",
+    title: "Aurora Centralis",
+    year: "'17",
+    venue: "Aquaregia",
+    duration: "7:01",
+    cover: "/photos/aurora-centralis.jpg",
+    embedUrl: "https://soundcloud.com/747/747-aurora-centralis",
   },
 ];

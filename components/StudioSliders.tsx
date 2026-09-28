@@ -117,7 +117,7 @@ function ClockKnob({
   const deg = valueToDeg(value);
 
   return (
-    <div className="studio-knob">
+    <div className="studio-knob" data-rail-drift>
       <span className="studio-knob__label" id={labelId}>
         {label}
       </span>

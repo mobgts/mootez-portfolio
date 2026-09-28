@@ -21,7 +21,9 @@ export const site = {
     { id: "contact", label: "contact" },
   ] satisfies NavItem[],
   about: {
-    lead: "I have been reflecting on how i am spending my time lately and felt a bit scattered between all these digital hobbies/not so much hobbies sometimes, and thought i need a structure going on from here. This portfolio serves as a consolidation point and a start to a long journey of learning, that i would love to take you on with me.",
-    body: "My name is Mootez Boughattas, currently Bonn based, and i feel like i don't have much to say. If something comes up i will update this section.",
+    lead: "Writing the about section feels a bit daunting. Who am I? What have I done? What's shaping me?",
+    story:
+      "Well, I'm trying to consolidate my digital hobbies here (sometimes not so much hobbies), which I guess makes me multidisciplinary? I build digital experiences that feel personal, I shoot photos, I mix sometimes, and I love to keep improving at the intersection. I'll see where this gets me. Love to have you on the journey :)",
+    body: "My name is Mootez Boughattas, based in Bonn. If you're interested to know more, just hit me up :)",
   },
 };

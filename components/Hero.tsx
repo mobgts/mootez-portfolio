@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { openAlbumDirect } from "@/content/albumUi";
 import { getAlbum } from "@/content/photos";
+import { SilkArrive, useSilkDrive } from "./AboutSilk";
 
 type CollageFit = {
   /** How many singles each row can show (1–3). */
@@ -237,6 +238,7 @@ export function Hero() {
   const sectionRef = useRef<HTMLElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const fit = useCollageFit(sectionRef);
+  const drive = useSilkDrive(sectionRef);
 
   // Size hero to the collage so Sound sits at a consistent section gap.
   useEffect(() => {
@@ -276,28 +278,36 @@ export function Hero() {
       <div className="hero-collage pointer-events-none absolute inset-x-0 top-0 z-10 min-h-full">
         <div
           ref={stageRef}
-          className="hero-collage__stage pointer-events-none absolute top-[8vh] left-[8%] z-40 flex flex-col gap-3 md:top-[10vh] md:left-[10%] md:gap-4"
+          className="hero-collage__stage pointer-events-none absolute top-[8vh] left-[8%] z-40 md:top-[10vh] md:left-[10%]"
         >
-          <div className="hero-collage__row hero-collage__row--top flex flex-row items-start gap-4 md:gap-5">
-            <DoublesStack albumId="doubles" large={fit.large} />
-            <HeroSinglesRow
-              albumId="doubles"
-              className="hero-singles--top"
-              count={fit.singles}
-              align="start"
-              large={fit.large}
-            />
-          </div>
-          <div className="hero-collage__row hero-collage__row--bottom -mt-16 flex flex-row items-start gap-4 md:-mt-20 md:gap-5">
-            <HeroSinglesRow
-              albumId="night"
-              className="hero-singles--bottom"
-              count={fit.singles}
-              align="end"
-              large={fit.large}
-            />
-            <DoublesStack albumId="night" mirror large={fit.large} />
-          </div>
+          <SilkArrive
+            drive={drive}
+            strength={0.7}
+            warpScale={0}
+            startVisible
+            className="flex flex-col gap-3 md:gap-4"
+          >
+            <div className="hero-collage__row hero-collage__row--top flex flex-row items-start gap-4 md:gap-5">
+              <DoublesStack albumId="doubles" large={fit.large} />
+              <HeroSinglesRow
+                albumId="doubles"
+                className="hero-singles--top"
+                count={fit.singles}
+                align="start"
+                large={fit.large}
+              />
+            </div>
+            <div className="hero-collage__row hero-collage__row--bottom -mt-16 flex flex-row items-start gap-4 md:-mt-20 md:gap-5">
+              <HeroSinglesRow
+                albumId="night"
+                className="hero-singles--bottom"
+                count={fit.singles}
+                align="end"
+                large={fit.large}
+              />
+              <DoublesStack albumId="night" mirror large={fit.large} />
+            </div>
+          </SilkArrive>
         </div>
       </div>
     </section>

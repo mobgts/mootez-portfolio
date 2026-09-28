@@ -18,6 +18,9 @@ type HeroWarpProps = {
   alt: string;
 };
 
+/** Bump when fragment logic changes so the WebGL program recompiles on HMR. */
+const WARP_SHADER_REV = 2;
+
 const VERTEX = `
 attribute vec2 aPos;
 varying vec2 vUv;
@@ -28,8 +31,8 @@ void main() {
 `;
 
 // Fixed viewport canvas: silk runs the whole page while paper grades olive →
-// cream. Portrait embeds in About on the right — clearer than the old full
-// drape, still woven into the field. Swells travel the folds; cursor brings colour.
+// cream. Portrait is a normal About image (not woven into this field).
+// Swells travel the folds; cursor brings colour.
 const FRAGMENT = `
 precision highp float;
 
@@ -148,10 +151,10 @@ void main() {
   float portraitH = max(uPortraitH, 1.0);
   float localY = docY - portraitTop;
 
-  // Embedded in About — hold longer so the figure stays readable through the section.
-  float enter = smoothstep(-portraitH * 0.08, portraitH * 0.04, localY);
-  float leave = smoothstep(portraitH * 0.72, portraitH * 1.28, localY);
-  float clear = 1.0 - enter * (1.0 - leave);
+  // Portrait is a normal About <Image> — never embed it into the silk field.
+  float enter = 0.0;
+  float leave = 1.0;
+  float clear = 1.0;
 
   // Portrait framing on the About band. About: nudge silhouette left + down.
   float bandY = 1.0 - clamp(localY / portraitH, 0.0, 1.0);
@@ -274,15 +277,15 @@ void main() {
   // Rough photo UV before warp — used to mask body/arm without fighting the face.
   vec2 preUv = vec2(sampleX, sampleY);
   float faceKeep = 1.0 - smoothstep(
-    0.10,
-    0.24,
-    length((preUv - vec2(0.48, 0.62)) * vec2(1.15, 1.4))
+    0.08,
+    0.22,
+    length((preUv - vec2(0.50, 0.44)) * vec2(1.2, 1.55))
   );
-  // Lit left arm/shoulder → down the sleeve (viewer left). Face stays locked.
-  float armDown = 1.0 - smoothstep(0.04, 0.36, preUv.y);
-  float leftArm = (1.0 - smoothstep(0.18, 0.52, preUv.x))
-                * smoothstep(0.02, 0.22, preUv.y)
-                * (1.0 - smoothstep(0.56, 0.76, preUv.y))
+  // Left arm on the boat rim (viewer left). Face stays locked.
+  float armDown = 1.0 - smoothstep(0.08, 0.42, preUv.y);
+  float leftArm = (1.0 - smoothstep(0.12, 0.48, preUv.x))
+                * smoothstep(0.28, 0.48, preUv.y)
+                * (1.0 - smoothstep(0.62, 0.82, preUv.y))
                 * (1.0 - faceKeep);
   // Stronger further down the arm; quiet at the shoulder.
   leftArm *= mix(0.25, 1.4, armDown);
@@ -379,12 +382,12 @@ void main() {
   portrait *= 1.0 - 0.06 * fuzz * fuzz;
   portrait *= 1.0 - 0.04 * length((heroP - 0.5) * vec2(heroAspect, 1.0));
 
-  // Inverted colour block on the eye (photo UV) — full solid stamp.
-  vec2 eyeC = vec2(0.492, 0.688);
-  float eyeL = 0.118;
-  float eyeR = 0.052;
-  float eyeT = 0.072;
-  float eyeB = 0.078;
+  // Inverted colour block on the sunglasses (photo UV) — full solid stamp.
+  vec2 eyeC = vec2(0.50, 0.435);
+  float eyeL = 0.075;
+  float eyeR = 0.075;
+  float eyeT = 0.035;
+  float eyeB = 0.035;
   float eyeMask =
     step(eyeC.x - eyeL, sampleUv.x) * step(sampleUv.x, eyeC.x + eyeR) *
     step(eyeC.y - eyeB, sampleUv.y) * step(sampleUv.y, eyeC.y + eyeT);
@@ -449,8 +452,8 @@ void main() {
   portrait *= clamp(1.0 + silkRim * (fold * 0.16 - trough * 0.12) * liftGain, 0.7, mix(1.3, 1.12, paperBright));
   portrait += silkRim * sheen * 0.05;
 
-  // Hold the print only on the figure; paper everywhere else in the band.
-  float hold = (1.0 - clear) * figure;
+  // Portrait lives in the About <Image> on the right — do not embed it in the silk.
+  float hold = 0.0;
   vec3 col = mix(fieldCol, portrait, hold);
 
   // Laid on the finished sheet so the press reads the same on the portrait and on
@@ -600,14 +603,10 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
     const readScroll = () => {
       const viewH = window.innerHeight;
       const heroEl = document.querySelector<HTMLElement>("[data-story-hero]");
-      const aboutEl = document.querySelector<HTMLElement>("#about");
       const heroH = heroEl ? heroEl.offsetHeight : viewH;
-      // Smaller still, pinned into About and biased to the right of the copy.
-      const aboutTop = aboutEl
-        ? aboutEl.getBoundingClientRect().top + window.scrollY
-        : heroH;
-      const portraitH = viewH * 0.78;
-      const portraitTop = aboutTop + Math.min(32, viewH * 0.03);
+      // Portrait embed disabled — photo lives in About as a normal image.
+      const portraitH = 1;
+      const portraitTop = 1e9;
       scrollRef.current = {
         y: window.scrollY,
         viewH,
@@ -871,8 +870,8 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
 
           gl.uniform2f(u.res, width, height);
           gl.uniform1f(u.photoAspect, photoAspect);
-          gl.uniform1f(u.fit, width < 768 ? 0.64 : 0.8);
-          gl.uniform1f(u.focusX, width < 768 ? 0.82 : 0.76);
+          gl.uniform1f(u.fit, width < 768 ? 0.66 : 0.8);
+          gl.uniform1f(u.focusX, width < 768 ? 0.58 : 0.55);
           gl.uniform1f(u.heroH, heroH);
           gl.uniform1f(u.portraitTop, portraitTop);
           gl.uniform1f(u.portraitH, portraitH);
@@ -912,7 +911,7 @@ export function HeroWarp({ src, flowSrc, bleedSrc, maskSrc, alt }: HeroWarpProps
       gl.deleteBuffer(buffer);
       gl.deleteProgram(program);
     };
-  }, [src, flowSrc, bleedSrc, maskSrc]);
+  }, [src, flowSrc, bleedSrc, maskSrc, WARP_SHADER_REV]);
 
   return (
     <div

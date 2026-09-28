@@ -11,16 +11,18 @@ import { StoryShell } from "@/components/StoryShell";
 
 export default function Home() {
   return (
-    <StoryShell>
-      <PageTint />
-      <StudioRail />
-      <StickyNav />
+    <>
+      <StoryShell>
+        <PageTint />
+        <StudioRail />
+        <StickyNav />
+        <Hero />
+        <SoundWork />
+        <DevWork />
+        <About />
+        <Contact />
+      </StoryShell>
       <AlbumHost />
-      <Hero />
-      <SoundWork />
-      <DevWork />
-      <About />
-      <Contact />
-    </StoryShell>
+    </>
   );
 }

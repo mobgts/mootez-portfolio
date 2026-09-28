@@ -167,11 +167,13 @@ const heroCrop = {
 // otherwise the field would not match the frame it continues from.
 const TONE = { slope: 0.86, offset: 30 };
 
+// Never upscale phone stills — keep the source pixel grid. High JPEG quality so
+// rebuilds stay close to the original file.
 await sharp(HERO_SOURCE)
   .extract(heroCrop)
-  .resize(1800, null, { withoutEnlargement: false })
+  .resize(1800, null, { withoutEnlargement: true })
   .linear(TONE.slope, TONE.offset)
-  .jpeg({ quality: 92, mozjpeg: true })
+  .jpeg({ quality: 98, mozjpeg: true, chromaSubsampling: "4:4:4" })
   .toFile("public/photos/hero-warp.jpg");
 
 // Soft enlargement of the same frame. The hero bleeds this into whatever space the

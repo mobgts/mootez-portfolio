@@ -50,11 +50,6 @@ declare global {
 
 const WAVE_BARS = 96;
 
-/** Soft envelope used only while the real SoundCloud waveform loads. */
-const WAVE_LOAD_HEIGHTS = Array.from({ length: WAVE_BARS }, (_, i) => {
-  return 0.22 + 0.55 * Math.sin((i / (WAVE_BARS - 1)) * Math.PI);
-});
-
 function SoundCloudIcon() {
   return (
     <svg
@@ -212,7 +207,9 @@ export function SoundWork() {
   const [progress, setProgress] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
   const [positionMs, setPositionMs] = useState(0);
-  const [bars, setBars] = useState<number[] | null>(null);
+  const [bars, setBars] = useState<number[]>(() =>
+    waveHeights("wave", WAVE_BARS),
+  );
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const widgetRef = useRef<SoundCloudWidget | null>(null);
   const waveRef = useRef<HTMLDivElement>(null);
@@ -220,7 +217,6 @@ export function SoundWork() {
   const drive = useSilkDrive(sectionRef);
 
   const activeSet = sets.find((set) => set.slug === active) ?? null;
-  const waveReady = bars !== null;
 
   useEffect(() => {
     if (!active || !activeSet?.embedUrl) {
@@ -229,11 +225,10 @@ export function SoundWork() {
       setProgress(0);
       setDurationMs(0);
       setPositionMs(0);
-      setBars(null);
       return;
     }
 
-    setBars(null);
+    setBars(waveHeights(activeSet.slug, WAVE_BARS));
 
     let cancelled = false;
     if (!iframeRef.current) return;
@@ -250,16 +245,13 @@ export function SoundWork() {
             if (!cancelled) setDurationMs(ms);
           });
           widget.getCurrentSound((sound) => {
-            if (cancelled || !sound?.waveform_url) {
-              if (!cancelled) setBars(waveHeights(activeSet.slug, WAVE_BARS));
-              return;
-            }
+            if (cancelled || !sound?.waveform_url) return;
             sampleWaveformBars(sound.waveform_url, WAVE_BARS)
               .then((heights) => {
                 if (!cancelled) setBars(heights);
               })
               .catch(() => {
-                if (!cancelled) setBars(waveHeights(activeSet.slug, WAVE_BARS));
+                /* Keep the seeded placeholder if sampling fails. */
               });
           });
           widget.play();
@@ -288,7 +280,6 @@ export function SoundWork() {
       })
       .catch(() => {
         /* Audio iframe may still autoplay without the API. */
-        if (!cancelled) setBars(waveHeights(activeSet.slug, WAVE_BARS));
       });
 
     return () => {
@@ -302,7 +293,6 @@ export function SoundWork() {
     setIsPlaying(true);
     setProgress(0);
     setPositionMs(0);
-    setBars(null);
   }
 
   function closeSet() {
@@ -312,7 +302,6 @@ export function SoundWork() {
     setProgress(0);
     setPositionMs(0);
     setDurationMs(0);
-    setBars(null);
   }
 
   function togglePlayback() {
@@ -345,6 +334,7 @@ export function SoundWork() {
       <SilkArrive
         drive={drive}
         strength={1.1}
+        still
         className="flex justify-center"
       >
         <div className="sound-player">
@@ -352,13 +342,13 @@ export function SoundWork() {
             <SoundCloudIcon />
             <div className="sound-player__copy">
               <p className="sound-player__heading">
-                I&apos;ll be uploading my mixes here soon :)
+                I&apos;ll be uploading my mixes here :)
+              </p>
+              <p className="sound-player__subhead">
+                Meanwhile, a track that will always have my heart
               </p>
             </div>
           </div>
-          <p className="sound-player__subhead">
-            Meanwhile, a track that will always have my heart, enjoy.
-          </p>
           {sets.map((set) => {
             const isOpen = active === set.slug;
             const timeLabel =
@@ -446,22 +436,19 @@ export function SoundWork() {
                       </button>
                       <div
                         ref={waveRef}
-                        className={`sound-player__wave${waveReady ? "" : " is-loading"}`}
+                        className="sound-player__wave"
                         role="slider"
-                        tabIndex={waveReady ? 0 : -1}
-                        aria-busy={!waveReady}
+                        tabIndex={0}
                         aria-label={`${set.title} position`}
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-valuenow={Math.round(progress * 100)}
                         onClick={(event) => {
                           event.stopPropagation();
-                          if (!waveReady) return;
                           seekFromPointer(event.clientX);
                         }}
                         onKeyDown={(event) => {
-                          if (!waveReady || !widgetRef.current || durationMs <= 0)
-                            return;
+                          if (!widgetRef.current || durationMs <= 0) return;
                           const step = durationMs * 0.05;
                           if (event.key === "ArrowRight") {
                             event.preventDefault();
@@ -477,65 +464,33 @@ export function SoundWork() {
                           }
                         }}
                       >
-                        {waveReady && bars ? (
-                          <div className="sound-player__wave-track" aria-hidden>
-                            <div className="sound-player__wave-half sound-player__wave-half--top">
-                              {bars.map((height, i) => {
-                                const played = i / WAVE_BARS <= progress;
-                                return (
-                                  <span
-                                    key={`t-${i}`}
-                                    className={`sound-player__wave-bar${played ? " is-played" : ""}`}
-                                    style={{ height: `${height * 100}%` }}
-                                  />
-                                );
-                              })}
-                            </div>
-                            <div className="sound-player__wave-half sound-player__wave-half--bot">
-                              {bars.map((height, i) => {
-                                const played = i / WAVE_BARS <= progress;
-                                return (
-                                  <span
-                                    key={`b-${i}`}
-                                    className={`sound-player__wave-bar sound-player__wave-bar--mirror${played ? " is-played" : ""}`}
-                                    style={{ height: `${height * 55}%` }}
-                                  />
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ) : (
-                          <div
-                            className="sound-player__wave-loader"
-                            aria-hidden
-                          >
-                            <div className="sound-player__wave-half sound-player__wave-half--top">
-                              {WAVE_LOAD_HEIGHTS.map((height, i) => (
+                        <div className="sound-player__wave-track" aria-hidden>
+                          <div className="sound-player__wave-half sound-player__wave-half--top">
+                            {bars.map((height, i) => {
+                              const played = i / WAVE_BARS <= progress;
+                              return (
                                 <span
-                                  key={`lt-${i}`}
-                                  className="sound-player__wave-bar sound-player__wave-bar--load"
-                                  style={{
-                                    ["--i" as string]: i,
-                                    height: `${height * 100}%`,
-                                  }}
+                                  key={`t-${i}`}
+                                  className={`sound-player__wave-bar${played ? " is-played" : ""}`}
+                                  style={{ height: `${height * 100}%` }}
                                 />
-                              ))}
-                            </div>
-                            <div className="sound-player__wave-half sound-player__wave-half--bot">
-                              {WAVE_LOAD_HEIGHTS.map((height, i) => (
-                                <span
-                                  key={`lb-${i}`}
-                                  className="sound-player__wave-bar sound-player__wave-bar--mirror sound-player__wave-bar--load"
-                                  style={{
-                                    ["--i" as string]: i,
-                                    height: `${height * 55}%`,
-                                  }}
-                                />
-                              ))}
-                            </div>
+                              );
+                            })}
                           </div>
-                        )}
-                        {waveReady && timeLabel ? (
+                          <div className="sound-player__wave-half sound-player__wave-half--bot">
+                            {bars.map((height, i) => {
+                              const played = i / WAVE_BARS <= progress;
+                              return (
+                                <span
+                                  key={`b-${i}`}
+                                  className={`sound-player__wave-bar sound-player__wave-bar--mirror${played ? " is-played" : ""}`}
+                                  style={{ height: `${height * 55}%` }}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                        {timeLabel ? (
                           <span className="sound-player__wave-time">
                             {timeLabel}
                           </span>
