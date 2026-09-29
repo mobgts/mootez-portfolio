@@ -6,24 +6,17 @@ function clamp01(n: number) {
   return Math.min(1, Math.max(0, n));
 }
 
-function easeOutCubic(t: number) {
-  return 1 - Math.pow(1 - t, 3);
-}
-
 function easeInOutCubic(t: number) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
+/** Viewport-space box — rail / face nav are fixed, so this stays stable across scroll. */
 type OriginBox = {
-  /** Document-space top (scroll-stable). */
-  docTop: number;
+  top: number;
   left: number;
   width: number;
   height: number;
 };
-
-/** Last on-screen nav word for each id — survives the mobile face exit. */
-const originCache = new Map<string, OriginBox>();
 
 function effectiveOpacity(el: HTMLElement) {
   let opacity = 1;
@@ -37,46 +30,79 @@ function effectiveOpacity(el: HTMLElement) {
   return opacity;
 }
 
-function readLiveOrigin(id: string): OriginBox | null {
+/** Prefer the text glyph box so we line up under the word, not the hit target. */
+function textBox(el: HTMLElement): OriginBox {
+  const text = Array.from(el.childNodes).find(
+    (n) => n.nodeType === Node.TEXT_NODE && n.textContent?.trim(),
+  );
+  if (text) {
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    const rect = range.getBoundingClientRect();
+    if (rect.width >= 1 && rect.height >= 1) {
+      return {
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      };
+    }
+  }
+
+  const labeled = el.querySelector("span");
+  if (labeled) {
+    const rect = labeled.getBoundingClientRect();
+    if (rect.width >= 1 && rect.height >= 1) {
+      return {
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      };
+    }
+  }
+
+  const rect = el.getBoundingClientRect();
+  return {
+    top: rect.top,
+    left: rect.left,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+/** Snapshot the matching rail / sticky-nav word in viewport space. */
+function readNavOrigin(id: string, preferRail: boolean): OriginBox | null {
   const nodes = document.querySelectorAll<HTMLElement>(
     `[data-nav-origin="${id}"]`,
   );
 
-  for (const node of nodes) {
+  const ordered = preferRail
+    ? [
+        ...Array.from(nodes).filter((n) => n.closest(".studio-rail")),
+        ...Array.from(nodes).filter((n) => !n.closest(".studio-rail")),
+      ]
+    : Array.from(nodes);
+
+  for (const node of ordered) {
     const rail = node.closest(".studio-rail");
     if (rail && getComputedStyle(rail).display === "none") continue;
     if (node.closest(".site-nav.is-hidden")) continue;
     if (node.closest(".site-nav.is-exited")) continue;
 
-    const rect = node.getBoundingClientRect();
-    if (rect.width < 1 || rect.height < 1) continue;
-    // Still on the face while it drifts out — ignore once mostly off-screen.
-    if (rect.right < 8 || rect.left > window.innerWidth - 8) continue;
-    if (rect.bottom < 0 || rect.top > window.innerHeight) continue;
+    const box = textBox(node);
+    if (box.width < 1 || box.height < 1) continue;
+    if (box.left + box.width < 8 || box.left > window.innerWidth - 8) continue;
+    if (box.top + box.height < 0 || box.top > window.innerHeight) continue;
     if (effectiveOpacity(node) < 0.2) continue;
 
     const style = getComputedStyle(node);
     if (style.visibility === "hidden") continue;
 
-    return {
-      docTop: rect.top + window.scrollY,
-      left: rect.left,
-      width: rect.width,
-      height: rect.height,
-    };
+    return box;
   }
 
   return null;
-}
-
-/** Live nav word when visible; otherwise the last place we saw it. */
-function getNavOriginBox(id: string): OriginBox | null {
-  const live = readLiveOrigin(id);
-  if (live) {
-    originCache.set(id, live);
-    return live;
-  }
-  return originCache.get(id) ?? null;
 }
 
 /** Surfaces that should keep a flying title invisible while covering it. */
@@ -123,50 +149,34 @@ export function FromNavMark({
 
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
     const mobile = window.matchMedia("(max-width: 767px)");
+    const section = slot.closest("section") ?? slot;
 
-    /** Resting geometry in document space, so a scroll needs no layout read. */
-    type Rest = {
-      docTop: number;
-      left: number;
-      width: number;
-      height: number;
-      secDocTop: number;
-    };
-
-    let rest: Rest | null = null;
     let occluders: Box[] = [];
     let raf = 0;
     let flying = false;
-    /** Last state written, so a settled title stops touching the DOM. */
+    /** Frozen once per peel — never reset mid-flight (that caused the wrong→right hop). */
+    let frozenOrigin: OriginBox | null = null;
+    let seatSize = { width: 0, height: 0 };
     let written = "";
+    let needsTick = false;
+    /** Ignore ResizeObserver while we hold the seat open for fixed flight. */
+    let holdingSeat = false;
 
-    // Reading the box meant writing `transform: none` and reading it straight
-    // back, which forces a synchronous layout. Once per layout change, not once
-    // per frame, is the difference between smooth and stuttering on a phone.
-    const measureRest = () => {
-      const previous = fly.style.transform;
-      fly.style.transform = "none";
-      const box = fly.getBoundingClientRect();
-      fly.style.transform = previous;
-
-      const section = slot.closest("section");
-      const sectionBox = (section ?? slot).getBoundingClientRect();
-      const scrollY = window.scrollY;
-
-      rest = {
-        docTop: box.top + scrollY,
-        left: box.left,
-        width: box.width,
-        height: box.height,
-        secDocTop: sectionBox.top + scrollY,
-      };
+    const clearFlyPin = () => {
+      holdingSeat = false;
+      fly.style.position = "";
+      fly.style.left = "";
+      fly.style.top = "";
+      fly.style.zIndex = "";
+      fly.style.transform = "";
+      fly.style.transformOrigin = "";
+      slot.style.height = "";
     };
 
     const measureOccluders = () => {
       const scrollY = window.scrollY;
       occluders = [];
       for (const card of document.querySelectorAll<HTMLElement>(OCCLUDER_SEL)) {
-        // Ignore empty surfaces and our own mark subtree.
         if (slot.contains(card)) continue;
         const cr = card.getBoundingClientRect();
         if (cr.width < 12 || cr.height < 12) continue;
@@ -179,7 +189,6 @@ export function FromNavMark({
       }
     };
 
-    /** True when the flying title box still sits over a card / media surface. */
     const occluded = (left: number, docTop: number, w: number, h: number) => {
       const titleBox = {
         left: left - 6,
@@ -193,13 +202,25 @@ export function FromNavMark({
       return false;
     };
 
+    /** Begin a desktop peel: capture nav word + in-flow seat size once. */
+    const beginDesktopPeel = () => {
+      clearFlyPin();
+      const box = fly.getBoundingClientRect();
+      seatSize = { width: box.width, height: box.height };
+      holdingSeat = true;
+      slot.style.height = `${Math.max(box.height, 1)}px`;
+      frozenOrigin = readNavOrigin(navId, true);
+    };
+
     const paint = () => {
       const extraEl = extraElRef.current;
 
       if (reduce.matches) {
+        needsTick = false;
+        frozenOrigin = null;
         if (written === "reduce") return;
         written = "reduce";
-        fly.style.transform = "";
+        clearFlyPin();
         fly.style.opacity = "1";
         fly.style.visibility = "";
         fly.style.pointerEvents = "";
@@ -211,31 +232,26 @@ export function FromNavMark({
         return;
       }
 
-      if (!rest) measureRest();
-      if (!rest) return;
-
       const scrollY = window.scrollY;
       const vh = window.innerHeight;
-      const secTop = rest.secDocTop - scrollY;
-      const restTop = rest.docTop - scrollY;
+      // Live section top — always aims at the real seat, no stale cache.
+      const secTop = section.getBoundingClientRect().top;
 
-      // Start as the section enters; land by the time the title seat is comfy.
-      // Mobile: longer window so mid-screen → seat can read as a story.
-      const start = mobile.matches ? vh * 0.95 : vh * 0.9;
-      const end = mobile.matches ? vh * 0.18 : vh * 0.22;
+      const start = mobile.matches ? vh * 0.95 : vh * 1.05;
+      const end = mobile.matches ? vh * 0.18 : vh * 0.28;
       const raw = clamp01((start - secTop) / Math.max(start - end, 1));
-      // Mobile travel uses in-out so the mid → seat glide eases both ends.
-      const p = mobile.matches ? easeInOutCubic(raw) : easeOutCubic(raw);
+      const p = easeInOutCubic(raw);
       const leave = 1 - p;
 
-      // Cards can open and close between passes, so refresh their boxes on the way in.
       if (raw > 0 && !flying) measureOccluders();
       flying = raw > 0;
+      needsTick = raw > 0 && leave > 0.001;
 
-      // Not in motion yet — stay invisible (desktop: rail word only; mobile: no mid ghost).
       if (raw <= 0) {
+        frozenOrigin = null;
         if (written === "hidden") return;
         written = "hidden";
+        clearFlyPin();
         fly.style.opacity = "0";
         fly.style.visibility = "hidden";
         fly.style.pointerEvents = "none";
@@ -246,11 +262,11 @@ export function FromNavMark({
         return;
       }
 
-      // Settled: identity transform at full opacity.
       if (leave <= 0.001) {
+        frozenOrigin = null;
         if (written === "rest") return;
         written = "rest";
-        fly.style.transform = "";
+        clearFlyPin();
         fly.style.opacity = "1";
         fly.style.visibility = "";
         fly.style.pointerEvents = "";
@@ -264,21 +280,23 @@ export function FromNavMark({
 
       // Mobile: materialize at mid-viewport, then settle into the section seat.
       if (mobile.matches) {
-        const midX = window.innerWidth * 0.5 - rest.width * 0.5;
-        const midY = vh * 0.42 - rest.height * 0.5;
-        const dx = midX - rest.left;
-        const dy = midY - restTop;
+        frozenOrigin = null;
+        clearFlyPin();
+        const seat = slot.getBoundingClientRect();
+        const midX = window.innerWidth * 0.5 - seat.width * 0.5;
+        const midY = vh * 0.42 - seat.height * 0.5;
+        const dx = midX - seat.left;
+        const dy = midY - seat.top;
         const s = 0.92 + 0.08 * p;
-        const visX = rest.left + dx * leave;
-        const visY = restTop + dy * leave;
+        const visX = seat.left + dx * leave;
+        const visY = seat.top + dy * leave;
         const behind = occluded(
           visX,
           visY + scrollY,
-          rest.width * s,
-          rest.height * s,
+          seat.width * s,
+          seat.height * s,
         );
         const transform = `translate3d(${(dx * leave).toFixed(2)}px, ${(dy * leave).toFixed(2)}px, 0) scale(${s.toFixed(4)})`;
-        // Soft fade in over the first third, then hold — avoids a hard pop at mid.
         const fade = clamp01(raw / 0.32);
         const shown = behind ? 0 : fade;
         const key = `m|${transform}|${shown.toFixed(4)}|${behind ? 1 : 0}`;
@@ -298,13 +316,13 @@ export function FromNavMark({
         return;
       }
 
-      // Desktop: peel from the left-rail word into the section.
-      getNavOriginBox(navId);
-      const origin = getNavOriginBox(navId);
+      // Desktop: one origin freeze, live seat from the slot — straight path, no hop.
+      if (!frozenOrigin) beginDesktopPeel();
+      const origin = frozenOrigin;
       if (!origin) {
         if (written === "rest") return;
         written = "rest";
-        fly.style.transform = "";
+        clearFlyPin();
         fly.style.opacity = "1";
         fly.style.visibility = "";
         fly.style.pointerEvents = "";
@@ -316,44 +334,54 @@ export function FromNavMark({
         return;
       }
 
-      const fromTop = origin.docTop - scrollY;
-      const dx = origin.left - rest.left;
-      const dy = fromTop - restTop;
-      const sx = origin.width / Math.max(rest.width, 1);
-      const sy = origin.height / Math.max(rest.height, 1);
-      const s = 1 + ((sx + sy) * 0.5 - 1) * leave;
+      const seat = slot.getBoundingClientRect();
+      const x = origin.left + (seat.left - origin.left) * p;
+      const y = origin.top + (seat.top - origin.top) * p;
+      const sx = origin.width / Math.max(seatSize.width, 1);
+      const sy = origin.height / Math.max(seatSize.height, 1);
+      const s = 1 + ((sx + sy) * 0.5 - 1) * leave * 0.85;
 
-      const transform = `translate3d(${(dx * leave).toFixed(2)}px, ${(dy * leave).toFixed(2)}px, 0) scale(${s.toFixed(4)})`;
-      const opacity = clamp01(0.55 + p * 0.45);
-      const key = `d|${transform}|${opacity.toFixed(4)}`;
+      const opacity = clamp01(0.92 + p * 0.08);
+      const key = `d|${x.toFixed(2)}|${y.toFixed(2)}|${s.toFixed(4)}|${opacity.toFixed(4)}`;
       if (written === key) return;
       written = key;
 
+      fly.style.position = "fixed";
+      fly.style.left = `${x.toFixed(2)}px`;
+      fly.style.top = `${y.toFixed(2)}px`;
+      fly.style.zIndex = "50";
       fly.style.visibility = "visible";
       fly.style.pointerEvents = "";
       fly.style.transformOrigin = "left top";
-      fly.style.transform = transform;
+      fly.style.transform = `scale(${s.toFixed(4)})`;
       fly.style.opacity = String(opacity);
 
       if (extraEl) {
-        const reveal = clamp01((p - 0.12) / 0.88);
-        extraEl.style.visibility = "visible";
-        extraEl.style.transform = `translate3d(0, ${((1 - reveal) * 64).toFixed(2)}px, 0)`;
+        const reveal = clamp01((p - 0.18) / 0.82);
+        extraEl.style.visibility = reveal > 0 ? "visible" : "hidden";
+        extraEl.style.transform = `translate3d(0, ${((1 - reveal) * 48).toFixed(2)}px, 0)`;
         extraEl.style.opacity = String(reveal);
       }
     };
 
-    // One paint per frame at most, and only for frames where something moved.
+    const tick = () => {
+      raf = 0;
+      paint();
+      if (needsTick) {
+        raf = requestAnimationFrame(tick);
+      }
+    };
+
     const schedule = () => {
       if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        paint();
-      });
+      raf = requestAnimationFrame(tick);
     };
 
     const remeasure = () => {
-      rest = null;
+      // Don't restart an in-flight peel — that was the wrong-spot → right-spot hop.
+      if (!holdingSeat) {
+        frozenOrigin = null;
+      }
       written = "";
       measureOccluders();
       schedule();
@@ -365,10 +393,12 @@ export function FromNavMark({
     reduce.addEventListener("change", remeasure);
     mobile.addEventListener("change", remeasure);
 
-    const observer = new ResizeObserver(remeasure);
+    const observer = new ResizeObserver(() => {
+      if (holdingSeat) return;
+      remeasure();
+    });
     observer.observe(slot);
-    const section = slot.closest("section");
-    if (section) observer.observe(section);
+    observer.observe(section);
 
     return () => {
       cancelAnimationFrame(raf);
@@ -377,9 +407,8 @@ export function FromNavMark({
       reduce.removeEventListener("change", remeasure);
       mobile.removeEventListener("change", remeasure);
       observer.disconnect();
-      fly.style.transform = "";
+      clearFlyPin();
       fly.style.opacity = "";
-      fly.style.transformOrigin = "";
       fly.style.visibility = "";
       fly.style.pointerEvents = "";
       const extraEl = extraElRef.current;

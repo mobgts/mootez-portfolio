@@ -38,19 +38,23 @@ function StapleImage({
   photo,
   frameW,
   frameH,
-  sizes,
 }: {
   photo: Photo;
   frameW: number;
   frameH: number;
-  sizes: string;
 }) {
+  // Size to the larger frame edge so rotated wides aren't underserved;
+  // Next still multiplies by DPR for retina.
+  const slot = Math.max(frameW, frameH);
+  const sizes = `${slot}px`;
+
   if (photo.span !== "wide") {
     return (
       <Image
         src={photo.src}
         alt={photo.alt}
         fill
+        quality={92}
         sizes={sizes}
         className="hero-staple__img object-cover"
       />
@@ -72,6 +76,7 @@ function StapleImage({
         src={photo.src}
         alt={photo.alt}
         fill
+        quality={92}
         sizes={sizes}
         className="hero-staple__img object-cover"
       />
@@ -255,7 +260,6 @@ function DoublesStack({
                   photo={photo}
                   frameW={cardW}
                   frameH={cardH}
-                  sizes="(min-width: 768px) 238px, 160px"
                 />
               </div>
               {isLast ? (
@@ -352,7 +356,6 @@ function HeroSingle({
           photo={photo}
           frameW={w}
           frameH={h}
-          sizes="(min-width: 768px) 282px, 160px"
         />
       </div>
     </button>
@@ -449,13 +452,13 @@ export function Hero() {
                 style={{ gap: DESKTOP.rowGap, marginTop: -DESKTOP.rowPull }}
               >
                 <HeroSinglesRow
-                  albumId="funeral"
+                  albumId="water"
                   className="hero-singles--bottom"
                   count={fit.singles}
                   align="end"
                   large={fit.large}
                 />
-                <DoublesStack albumId="funeral" mirror large={fit.large} />
+                <DoublesStack albumId="water" mirror large={fit.large} />
               </div>
             </SilkArrive>
           </div>
