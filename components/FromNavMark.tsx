@@ -107,7 +107,7 @@ function readNavOrigin(id: string, preferRail: boolean): OriginBox | null {
 
 /** Surfaces that should keep a flying title invisible while covering it. */
 const OCCLUDER_SEL =
-  ".sound-player, .project-browser, .project-browser__file, .about-photo, .hero-collage__stage, .hero-series, .hero-single, .hero-staple";
+  ".sound-player, .project-browser, .project-browser__file, .about-photo, .image-series__frame, .image-series__titles";
 
 type Box = { left: number; top: number; right: number; bottom: number };
 

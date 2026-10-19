@@ -9,13 +9,18 @@ export type TintSample = {
   wash: [number, number, number];
 };
 
-// Studio olive — gentle monotonic grade so mobile scroll never snaps back.
+// Soft cream field — wash stays with paper so scroll never stains.
+const PAPER: [number, number, number] = [252, 250, 247];
+/** Richer cream for the closing chapters (about → contact). */
+const CREAM: [number, number, number] = [248, 241, 228];
+const CREAM_DEEP: [number, number, number] = [245, 236, 220];
+
 export const TINT_STOPS: TintStop[] = [
-  { id: "top", paper: [182, 187, 111], wash: [147, 149, 73] },
-  { id: "sound", paper: [172, 180, 104], wash: [136, 142, 64] },
-  { id: "dev", paper: [178, 176, 112], wash: [144, 142, 78] },
-  { id: "about", paper: [190, 182, 124], wash: [156, 148, 92] },
-  { id: "contact", paper: [210, 194, 148], wash: [180, 164, 118] },
+  { id: "top", paper: PAPER, wash: PAPER },
+  { id: "sound", paper: PAPER, wash: PAPER },
+  { id: "dev", paper: PAPER, wash: PAPER },
+  { id: "about", paper: CREAM, wash: CREAM },
+  { id: "contact", paper: CREAM_DEEP, wash: CREAM_DEEP },
 ];
 
 export function mixRgb(

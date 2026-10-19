@@ -14,9 +14,8 @@ export const site = {
   email: "boughattas.mootez@hotmail.com",
   linkedin: "https://www.linkedin.com/in/mootez-boughattas-2371261a8",
   nav: [
-    { id: "image", label: "image" },
-    { id: "sound", label: "sound" },
-    { id: "dev", label: "dev" },
+    { id: "image", label: "albums" },
+    // sound + dev hidden for now
     { id: "about", label: "about" },
     { id: "contact", label: "contact" },
   ] satisfies NavItem[],

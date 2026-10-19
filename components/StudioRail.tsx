@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { albums } from "@/content/photos";
-import { openAlbum } from "@/content/albumUi";
+import { openSeriesExpand } from "@/content/seriesExpandUi";
 import { site } from "@/content/site";
-import { StudioSliders } from "./StudioSliders";
+import { onNavSectionClick } from "@/lib/navScroll";
 
 function scrollToImage() {
   const target =
@@ -23,7 +23,6 @@ type DriftSpec = {
   phaseX: number;
   phaseY: number;
   phaseR: number;
-  /** Shift the wander so albums stay clear of the clip / mask. */
   biasX: number;
   biasY: number;
 };
@@ -31,60 +30,8 @@ type DriftSpec = {
 export function StudioRail() {
   const [imageOpen, setImageOpen] = useState(false);
   const railRef = useRef<HTMLElement>(null);
-  const navRef = useRef<HTMLElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
-  const padRef = useRef(0);
-  const openRef = useRef(false);
-  const settlingRef = useRef(false);
-  const settleTimer = useRef(0);
 
-  // Pin the list top so "image" stays put while albums open/close below.
-  useEffect(() => {
-    const nav = navRef.current;
-    const list = listRef.current;
-    if (!nav || !list) return;
-
-    const measure = () => {
-      // Skip while open or mid-collapse — measuring a partial album height
-      // shrinks paddingTop and yanks "image" up before it settles.
-      if (openRef.current || settlingRef.current) return;
-      const pad = Math.max(0, (nav.clientHeight - list.clientHeight) / 2);
-      padRef.current = pad;
-      nav.style.paddingTop = `${pad}px`;
-    };
-
-    openRef.current = imageOpen;
-    nav.style.paddingTop = `${padRef.current}px`;
-    window.clearTimeout(settleTimer.current);
-
-    if (imageOpen) {
-      settlingRef.current = false;
-      // Freeze pad for the whole open state — no re-center.
-      return;
-    }
-
-    // First paint: center once. After close: hold pad through the collapse
-    // (ignore ResizeObserver), then re-measure only when height is stable.
-    if (padRef.current === 0) {
-      measure();
-    } else {
-      settlingRef.current = true;
-      settleTimer.current = window.setTimeout(() => {
-        settlingRef.current = false;
-        measure();
-      }, 620);
-    }
-
-    const ro = new ResizeObserver(measure);
-    ro.observe(nav);
-    return () => {
-      window.clearTimeout(settleTimer.current);
-      settlingRef.current = false;
-      ro.disconnect();
-    };
-  }, [imageOpen]);
-
-  // Soft wander on rail labels / knobs — stays live even while hovered.
+  // Soft wander on each link — Trudy-style layout, living labels.
   useEffect(() => {
     const rail = railRef.current;
     if (!rail) return;
@@ -99,20 +46,20 @@ export function StudioRail() {
 
     const specs: DriftSpec[] = items.map((el, i) => {
       const album = el.classList.contains("studio-rail__album-drift");
+      const brand = el.classList.contains("studio-rail__name");
       return {
         el,
-        ampX: album ? 2.4 : 3.2 + (i % 3) * 1.4,
-        ampY: album ? 2.0 : 2.4 + (i % 4) * 1.1,
-        ampR: album ? 0.4 : 0.55 + (i % 3) * 0.28,
-        speedX: 0.00032 + i * 0.00006,
-        speedY: 0.00026 + i * 0.00008,
-        speedR: 0.0002 + i * 0.00005,
+        ampX: brand ? 4.8 : album ? 1.8 : 2.6 + (i % 3) * 1.1,
+        ampY: brand ? 3.8 : album ? 1.6 : 2.0 + (i % 4) * 0.9,
+        ampR: brand ? 0.75 : album ? 0.35 : 0.45 + (i % 3) * 0.22,
+        speedX: 0.00028 + i * 0.00005,
+        speedY: 0.00022 + i * 0.00007,
+        speedR: 0.00018 + i * 0.00004,
         phaseX: i * 1.73,
         phaseY: i * 2.41,
         phaseR: i * 1.19,
-        // Keep album labels left/up so they don't clip on the mask or bottom.
-        biasX: album ? -1.6 : 0,
-        biasY: album ? -1.2 : 0,
+        biasX: 0,
+        biasY: brand ? -1.2 : album ? -0.8 : 0,
       };
     });
 
@@ -130,12 +77,10 @@ export function StudioRail() {
         const r = Math.sin(now * s.speedR + s.phaseR) * s.ampR * ease;
         s.el.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) rotate(${r.toFixed(3)}deg)`;
       }
-
       raf = requestAnimationFrame(tick);
     };
 
     raf = requestAnimationFrame(tick);
-
     return () => {
       cancelAnimationFrame(raf);
       for (const s of specs) s.el.style.transform = "";
@@ -152,90 +97,88 @@ export function StudioRail() {
 
   return (
     <aside ref={railRef} className="studio-rail hero-enter hero-enter--nav">
-      <a href="#top" className="studio-rail__name" data-rail-drift>
-        <span>{site.name}.</span>
-        <span className="studio-rail__name-soft">{site.surname}</span>
-      </a>
+      <div className="studio-rail__top">
+        <a href="#top" className="studio-rail__name" data-rail-drift>
+          <span>{site.name}</span>
+          <span className="studio-rail__name-soft">
+            {"."}
+            {site.surname}
+          </span>
+        </a>
 
-      <nav ref={navRef} className="studio-rail__nav" aria-label="Site">
-        <ul ref={listRef}>
-          {site.nav.map((item) => {
-            if (item.id === "image") {
-              return (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    className="studio-rail__nav-btn"
-                    data-rail-drift
-                    data-nav-origin={item.id}
-                    aria-expanded={imageOpen}
-                    onClick={toggleImage}
+        <nav className="studio-rail__nav" aria-label="Site">
+          <ul className="studio-rail__links">
+            {site.nav.map((item, index) => {
+              const label =
+                index < site.nav.length - 1 ? `${item.label},` : item.label;
+
+              if (item.id === "image") {
+                return (
+                  <li
+                    key={item.id}
+                    className="studio-rail__item studio-rail__item--image"
                   >
-                    <span>{item.label}</span>
-                    <span
+                    <button
+                      type="button"
+                      className="studio-rail__nav-btn"
+                      data-rail-drift
+                      data-nav-origin={item.id}
+                      aria-expanded={imageOpen}
+                      aria-label={item.label}
+                      onClick={toggleImage}
+                    >
+                      {label}
+                    </button>
+                    <ul
                       className={
                         imageOpen
-                          ? "studio-rail__more studio-rail__more--open"
-                          : "studio-rail__more"
+                          ? "studio-rail__albums is-open"
+                          : "studio-rail__albums"
                       }
-                      aria-hidden
+                      aria-hidden={!imageOpen}
                     >
-                      <svg viewBox="0 0 10 6" fill="none" aria-hidden>
-                        <path d="M1 1.25L5 4.75L9 1.25" />
-                      </svg>
-                    </span>
-                  </button>
-                  <ul
-                    className={
-                      imageOpen
-                        ? "studio-rail__albums is-open"
-                        : "studio-rail__albums"
-                    }
-                    aria-hidden={!imageOpen}
-                  >
-                    <li className="studio-rail__albums-clip">
-                      <ul className="studio-rail__albums-list">
-                        {albums.map((album, index) => (
-                          <li key={album.id}>
-                            <span
-                              className="studio-rail__album-drift"
-                              data-rail-drift
-                            >
-                              <button
-                                type="button"
-                                tabIndex={imageOpen ? 0 : -1}
-                                onClick={() => openAlbum(album.id)}
-                                style={{ ["--i" as string]: index }}
+                      <li className="studio-rail__albums-clip">
+                        <ul className="studio-rail__albums-list">
+                          {albums.map((album, albumIndex) => (
+                            <li key={album.id}>
+                              <span
+                                className="studio-rail__album-drift"
+                                data-rail-drift
                               >
-                                {album.label.replace(/^series:\s*/i, "")}
-                              </button>
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </li>
-                  </ul>
+                                <button
+                                  type="button"
+                                  tabIndex={imageOpen ? 0 : -1}
+                                  onClick={() => openSeriesExpand(album.id)}
+                                  style={{ ["--i" as string]: albumIndex }}
+                                >
+                                  {album.label.replace(/^series:\s*/i, "")}
+                                </button>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </li>
+                    </ul>
+                  </li>
+                );
+              }
+
+              return (
+                <li key={item.id} className="studio-rail__item">
+                  <a
+                    href={`#${item.id}`}
+                    data-rail-drift
+                    data-nav-origin={item.id}
+                    aria-label={item.label}
+                    onClick={(event) => onNavSectionClick(event, item.id)}
+                  >
+                    {label}
+                  </a>
                 </li>
               );
-            }
-
-            return (
-              <li key={item.id}>
-                <a
-                  href={`#${item.id}`}
-                  data-rail-drift
-                  data-nav-origin={item.id}
-                >
-                  {item.label}
-                </a>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-
-      <div className="studio-rail__sliders">
-        <StudioSliders />
+            })}
+          </ul>
+        </nav>
       </div>
     </aside>
   );

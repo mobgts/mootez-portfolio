@@ -33,6 +33,52 @@ const doublesPhotos: Photo[] = [
     location: "Forest",
     span: "tall",
   },
+  // Placeholders — swap src when real doubles frames land.
+  {
+    slug: "doubles-04",
+    filename: "DOUBLES_04",
+    src: "/photos/doubles/placeholder-01.svg",
+    alt: "Series: doubles — placeholder 01",
+    year: "'26",
+    location: "Forest",
+    span: "tall",
+  },
+  {
+    slug: "doubles-05",
+    filename: "DOUBLES_05",
+    src: "/photos/doubles/placeholder-02.svg",
+    alt: "Series: doubles — placeholder 02",
+    year: "'26",
+    location: "Forest",
+    span: "tall",
+  },
+  {
+    slug: "doubles-06",
+    filename: "DOUBLES_06",
+    src: "/photos/doubles/placeholder-03.svg",
+    alt: "Series: doubles — placeholder 03",
+    year: "'26",
+    location: "Forest",
+    span: "wide",
+  },
+  {
+    slug: "doubles-07",
+    filename: "DOUBLES_07",
+    src: "/photos/doubles/placeholder-04.svg",
+    alt: "Series: doubles — placeholder 04",
+    year: "'26",
+    location: "Forest",
+    span: "tall",
+  },
+  {
+    slug: "doubles-08",
+    filename: "DOUBLES_08",
+    src: "/photos/doubles/placeholder-05.svg",
+    alt: "Series: doubles — placeholder 05",
+    year: "'26",
+    location: "Forest",
+    span: "wide",
+  },
 ];
 
 const waterPhotos: Photo[] = [
