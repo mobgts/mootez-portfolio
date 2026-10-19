@@ -6,6 +6,7 @@ import {
   closeAlbumPicker,
   getAlbumUi,
   openAlbum,
+  openAlbumPicker,
   subscribeAlbumUi,
   type AlbumUiState,
 } from "@/content/albumUi";
@@ -16,6 +17,11 @@ const EXIT_MS = 420;
 function dismiss() {
   closeAlbum();
   closeAlbumPicker();
+}
+
+function showAlbums() {
+  closeAlbum();
+  openAlbumPicker();
 }
 
 export function AlbumHost() {
@@ -59,6 +65,7 @@ export function AlbumHost() {
       open={visible}
       onClose={dismiss}
       onSelectAlbum={openAlbum}
+      onShowAlbums={showAlbums}
     />
   );
 }

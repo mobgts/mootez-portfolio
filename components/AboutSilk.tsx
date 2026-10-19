@@ -88,6 +88,14 @@ export function useSilkDrive(sectionRef: RefObject<HTMLElement | null>) {
         return;
       }
 
+      // Series handoff pins About before the section reaches mid-viewport —
+      // force silk clear so copy isn't stuck soft while waiting on section top.
+      if (document.documentElement.dataset.aboutFromSeries === "1") {
+        emergeRef.current = 1;
+        near = true;
+        return;
+      }
+
       // Wider band — section starts soft early and only settles near mid-viewport.
       const approach = 1 - Math.min(1, Math.max(0, rect.top / (viewH * 0.95)));
       const visible = Math.min(
@@ -194,9 +202,20 @@ export function useSilkDrive(sectionRef: RefObject<HTMLElement | null>) {
       const x = Math.sin(animTime * 0.55) * (3.4 + motion * 5.8) * introGain;
       const y = Math.cos(animTime * 0.38) * (4.4 + motion * 7.2) * introGain;
 
-      const target = Math.min(1, Math.max(0, emergeRef.current));
-      // Slow settle — silk has time to fold before the layer clears.
-      const rise = target >= smoothEmerge ? 0.85 : 1.6;
+      const fromSeries =
+        document.documentElement.dataset.aboutFromSeries === "1";
+      // Dataset can flip mid-frame (ImageSeries rAF) — don't wait for scroll.
+      const target = fromSeries
+        ? 1
+        : Math.min(1, Math.max(0, emergeRef.current));
+      // Series arrive: snap clear. Normal scroll: silk still has time to fold.
+      const rise = fromSeries
+        ? target >= smoothEmerge
+          ? 7.5
+          : 4
+        : target >= smoothEmerge
+          ? 0.85
+          : 1.6;
       smoothEmerge += (target - smoothEmerge) * Math.min(1, dt * rise);
       paint(x, y, smoothEmerge, motion, animTime);
     };

@@ -19,9 +19,9 @@ const INK_LIGHT: [number, number, number] = [247, 246, 242];
 const CREAM_LIFT: [number, number, number] = [250, 246, 238];
 const LERP = 0.14;
 
-/** Matches vibe default colour=0.6 at scroll top — same as :root. */
-const DEFAULT_PAPER: [number, number, number] = [187, 191, 120];
-const DEFAULT_WASH: [number, number, number] = [154, 156, 85];
+/** Matches vibe default — flat white paper. */
+const DEFAULT_PAPER: [number, number, number] = [252, 250, 247];
+const DEFAULT_WASH: [number, number, number] = [252, 250, 247];
 
 export function PageTint() {
   useEffect(() => {

@@ -6,25 +6,27 @@ import {
   type TintStop,
 } from "./tints";
 
-const CREAM: [number, number, number] = [245, 240, 230]; // #f5f0e6 clean beige
-const CREAM_WASH: [number, number, number] = [242, 237, 228]; // almost paper
+const PAPER: [number, number, number] = [252, 250, 247];
+const CREAM: [number, number, number] = [248, 241, 228];
+const CREAM_DEEP: [number, number, number] = [245, 236, 220];
+const WARM_CREAM: [number, number, number] = [250, 238, 224];
+const WARM_CREAM_DEEP: [number, number, number] = [248, 232, 214];
 
-// Flat clean beige — wash ≈ paper so the field never stains.
+// Soft paper up top; creamier field once about / contact arrive.
 export const CREAM_TINT_STOPS: TintStop[] = [
-  { id: "top", paper: CREAM, wash: CREAM_WASH },
-  { id: "sound", paper: CREAM, wash: CREAM_WASH },
-  { id: "dev", paper: CREAM, wash: CREAM_WASH },
-  { id: "about", paper: CREAM, wash: CREAM_WASH },
-  { id: "contact", paper: CREAM, wash: CREAM_WASH },
+  { id: "top", paper: PAPER, wash: PAPER },
+  { id: "sound", paper: PAPER, wash: PAPER },
+  { id: "dev", paper: PAPER, wash: PAPER },
+  { id: "about", paper: CREAM, wash: CREAM },
+  { id: "contact", paper: CREAM_DEEP, wash: CREAM_DEEP },
 ];
 
-// Final stretch (80%→100%): soft apricot sand — same section order as olive.
 export const WARM_TINT_STOPS: TintStop[] = [
-  { id: "top", paper: [236, 198, 168], wash: [210, 164, 128] },
-  { id: "sound", paper: [228, 188, 160], wash: [200, 154, 124] },
-  { id: "dev", paper: [232, 192, 166], wash: [204, 160, 130] },
-  { id: "about", paper: [238, 204, 176], wash: [214, 172, 140] },
-  { id: "contact", paper: [246, 218, 192], wash: [224, 186, 156] },
+  { id: "top", paper: PAPER, wash: PAPER },
+  { id: "sound", paper: PAPER, wash: PAPER },
+  { id: "dev", paper: PAPER, wash: PAPER },
+  { id: "about", paper: WARM_CREAM, wash: WARM_CREAM },
+  { id: "contact", paper: WARM_CREAM_DEEP, wash: WARM_CREAM_DEEP },
 ];
 
 /** Olive is fully reached at this slider position; past it → warm. */
@@ -42,7 +44,7 @@ export function mapVibeColor(warmth: number) {
   return COLOR_FLOOR + t * (1 - COLOR_FLOOR);
 }
 
-// Calm mono at cream — soft olive / apricot accents with tint (no pink).
+// Accents on white — soft olive / apricot (paper stays white).
 const ACCENT_CREAM: [number, number, number] = [88, 86, 80];
 const ACCENT_CREAM_DEEP: [number, number, number] = [48, 46, 42];
 const ACCENT_OLIVE: [number, number, number] = [158, 152, 88];

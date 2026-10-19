@@ -5,7 +5,9 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { openAlbumDirect } from "@/content/albumUi";
 import { getAlbum } from "@/content/photos";
 import type { Photo } from "@/content/types";
+import { useSoftDrift } from "@/lib/softDrift";
 import { SilkArrive, useSilkDrive } from "./AboutSilk";
+import { ImageSeries } from "./ImageSeries";
 
 /** Desktop collage metrics — source of truth. Everything else scales from these. */
 const DESKTOP = {
@@ -268,7 +270,7 @@ function DoublesStack({
                     mirror ? "text-right" : ""
                   }`}
                 >
-                  {album.label}
+                  <span data-soft-drift="slight">{album.label}</span>
                 </p>
               ) : null}
             </div>
@@ -296,15 +298,7 @@ function HeroSinglesRow({
   if (!album) return null;
 
   // Singles preview: shots past the stack covers (first 3).
-  // Temporary: doubles has no extras yet — reuse stack covers, with
-  // the first cover on the right (pair with align="end" below).
-  const photos =
-    albumId === "doubles" && album.photos.length <= 3
-      ? (() => {
-          const covers = album.photos.slice(0, 3);
-          return covers.length ? [...covers.slice(1), covers[0]] : [];
-        })()
-      : album.photos.slice(3);
+  const photos = album.photos.slice(3);
   const shown =
     align === "start"
       ? photos.slice(0, count)
@@ -367,22 +361,27 @@ export function Hero() {
   const stageRef = useRef<HTMLDivElement>(null);
   const fit = useCollageFit(sectionRef);
   const drive = useSilkDrive(sectionRef);
+  // Album name labels only — photos stay still.
+  useSoftDrift(sectionRef);
 
   const naturalW = rowWidth(fit.singles, fit.large);
   const naturalH = rowHeight(fit.large);
 
-  // Size hero to the collage so Sound sits at a consistent section gap.
+  // Mobile collage only — desktop height comes from ImageSeries panels.
   useEffect(() => {
     const section = sectionRef.current;
     const stage = stageRef.current;
     if (!section || !stage) return;
 
     const sync = () => {
+      if (window.matchMedia("(min-width: 768px)").matches) {
+        section.style.minHeight = "";
+        return;
+      }
       const sectionTop = section.getBoundingClientRect().top;
       const stageBottom = stage.getBoundingClientRect().bottom;
       const bottom = stageBottom - sectionTop;
-      const pad = window.matchMedia("(min-width: 768px)").matches ? 32 : 24;
-      section.style.minHeight = `${Math.ceil(bottom + pad)}px`;
+      section.style.minHeight = `${Math.ceil(bottom + 24)}px`;
     };
 
     sync();
@@ -405,7 +404,10 @@ export function Hero() {
     >
       {/* Keep #top for brand links while image nav scrolls here. */}
       <div id="top" className="pointer-events-none absolute inset-x-0 top-0 h-px" aria-hidden />
-      <div className="hero-collage pointer-events-none absolute inset-x-0 top-0 z-10 min-h-full overflow-x-clip">
+
+      <ImageSeries />
+
+      <div className="hero-collage pointer-events-none absolute inset-x-0 top-0 z-10 min-h-full overflow-x-clip md:hidden">
         <div
           ref={stageRef}
           className={

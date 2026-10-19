@@ -6,7 +6,7 @@ import { albums } from "@/content/photos";
 import type { Album, Photo } from "@/content/types";
 import { Still } from "./Still";
 
-type Level = "albums" | "photos" | "photo";
+type Level = "albums" | "photo";
 
 type AlbumOverlayProps = {
   album: Album | null;
@@ -14,18 +14,19 @@ type AlbumOverlayProps = {
   open: boolean;
   onClose: () => void;
   onSelectAlbum: (albumId: string) => void;
+  onShowAlbums: () => void;
 };
-
-function photoAspect(span: Photo["span"]) {
-  if (span === "wide") return "3 / 2";
-  if (span === "square") return "1 / 1";
-  return "3 / 4";
-}
 
 function photoAspectClass(span: Photo["span"]) {
   if (span === "wide") return "aspect-[3/2]";
   if (span === "square") return "aspect-square";
   return "aspect-[3/4]";
+}
+
+function filmShotWidth(span: Photo["span"]) {
+  if (span === "wide") return "min(72vw, 720px)";
+  if (span === "square") return "min(58vw, 520px)";
+  return "min(48vw, 420px)";
 }
 
 type DriftSpec = {
@@ -79,13 +80,13 @@ function resolveOpen(
   if (!album) {
     return { level: "albums", current: null, active: null };
   }
-  const active = initialSlug
-    ? (album.photos.find((photo) => photo.slug === initialSlug) ?? null)
-    : null;
-  if (active) {
-    return { level: "photo", current: album, active };
-  }
-  return { level: "photos", current: album, active: null };
+  const active =
+    (initialSlug
+      ? album.photos.find((photo) => photo.slug === initialSlug)
+      : null) ??
+    album.photos[0] ??
+    null;
+  return { level: "photo", current: album, active };
 }
 
 function displayLabel(value: string) {
@@ -98,8 +99,10 @@ export function AlbumOverlay({
   open,
   onClose,
   onSelectAlbum,
+  onShowAlbums,
 }: AlbumOverlayProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const filmRef = useRef<HTMLDivElement>(null);
   const [level, setLevel] = useState<Level>(
     () => resolveOpen(album, initialSlug).level,
   );
@@ -119,7 +122,41 @@ export function AlbumOverlay({
     setPanelKey((k) => k + 1);
   }, [album?.id, initialSlug]);
 
-  // Soft wander on overlay labels — same feel as the V-bar rail text.
+  useEffect(() => {
+    if (!open || level !== "photo" || !active) return;
+    let film = filmRef.current;
+    let removeWheel: (() => void) | undefined;
+    let raf = 0;
+
+    const attach = () => {
+      film = filmRef.current;
+      if (!film || !active) return;
+
+      const target = film.querySelector<HTMLElement>(
+        `[data-film-slug="${active.slug}"]`,
+      );
+      if (target) {
+        const left =
+          target.offsetLeft - (film.clientWidth - target.offsetWidth) / 2;
+        film.scrollLeft = Math.max(0, left);
+      }
+
+      const onWheel = (event: WheelEvent) => {
+        if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+        event.preventDefault();
+        film!.scrollLeft += event.deltaY;
+      };
+      film.addEventListener("wheel", onWheel, { passive: false });
+      removeWheel = () => film!.removeEventListener("wheel", onWheel);
+    };
+
+    raf = requestAnimationFrame(attach);
+    return () => {
+      cancelAnimationFrame(raf);
+      removeWheel?.();
+    };
+  }, [active?.slug, level, open, panelKey]);
+
   useEffect(() => {
     if (!open) return;
     const panel = panelRef.current;
@@ -150,7 +187,6 @@ export function AlbumOverlay({
           phaseX: i * 1.73,
           phaseY: i * 2.41,
           phaseR: i * 1.19,
-          // Nudge edge labels inward so the full wander stays visible.
           biasX: edge === "left" ? 1.8 : edge === "right" ? -1.8 : 0,
           biasY: 0,
         };
@@ -173,7 +209,6 @@ export function AlbumOverlay({
       raf = requestAnimationFrame(tick);
     };
 
-    // Wait a frame so remounted stage labels are in the DOM.
     raf = requestAnimationFrame(() => {
       if (cancelled) return;
       collect();
@@ -190,33 +225,33 @@ export function AlbumOverlay({
 
   const goBack = () => {
     if (level === "photo") {
-      setActive(null);
-      setLevel("photos");
-      setPanelKey((k) => k + 1);
-      return;
-    }
-    if (level === "photos") {
-      setLevel("albums");
-      setActive(null);
-      setPanelKey((k) => k + 1);
+      onShowAlbums();
       return;
     }
     onClose();
   };
 
-  const openPhoto = (photo: Photo) => {
-    setActive(photo);
-    setLevel("photo");
-    setPanelKey((k) => k + 1);
-  };
-
   const pickAlbum = (albumId: string) => {
     const next = albums.find((entry) => entry.id === albumId) ?? null;
+    const activePhoto = next?.photos[0] ?? null;
     setCurrent(next);
-    setActive(null);
-    setLevel("photos");
+    setActive(activePhoto);
+    setLevel("photo");
     setPanelKey((k) => k + 1);
     onSelectAlbum(albumId);
+  };
+
+  const focusShot = (photo: Photo) => {
+    setActive(photo);
+    const film = filmRef.current;
+    if (!film) return;
+    const target = film.querySelector<HTMLElement>(
+      `[data-film-slug="${photo.slug}"]`,
+    );
+    if (!target) return;
+    const left =
+      target.offsetLeft - (film.clientWidth - target.offsetWidth) / 2;
+    film.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
   };
 
   const step = (dir: 1 | -1) => {
@@ -225,7 +260,7 @@ export function AlbumOverlay({
     if (index < 0) return;
     const next =
       current.photos[(index + dir + current.photos.length) % current.photos.length];
-    setActive(next);
+    focusShot(next);
   };
 
   useEffect(() => {
@@ -241,35 +276,17 @@ export function AlbumOverlay({
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        if (level === "photo") {
-          setActive(null);
-          setLevel("photos");
-          setPanelKey((k) => k + 1);
-        } else if (level === "photos") {
-          setLevel("albums");
-          setActive(null);
-          setPanelKey((k) => k + 1);
-        } else {
-          onClose();
-        }
+        if (level === "photo") onShowAlbums();
+        else onClose();
         return;
       }
       if (level !== "photo" || !current || !active) return;
       if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
-      const dir = event.key === "ArrowRight" ? 1 : -1;
-      const index = current.photos.findIndex(
-        (photo) => photo.slug === active.slug,
-      );
-      if (index < 0) return;
-      setActive(
-        current.photos[
-          (index + dir + current.photos.length) % current.photos.length
-        ],
-      );
+      step(event.key === "ArrowRight" ? 1 : -1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, current, level, onClose, open]);
+  }, [active, current, level, onClose, onShowAlbums, open]);
 
   const title =
     level === "albums"
@@ -278,18 +295,14 @@ export function AlbumOverlay({
         ? displayLabel(current.label)
         : "albums";
 
-  const backLabel =
-    level === "albums"
-      ? "close"
-      : level === "photos"
-        ? "see all albums"
-        : "see series";
+  const backLabel = level === "albums" ? "close" : "see all albums";
+  const isFilm = level === "photo";
 
   return (
     <div
       className={`album-overlay fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8${
         open ? " is-open" : ""
-      }`}
+      }${isFilm ? " is-film" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -305,7 +318,11 @@ export function AlbumOverlay({
 
       <div
         ref={panelRef}
-        className="album-overlay__panel relative z-10 flex max-h-[min(92svh,920px)] w-full max-w-5xl flex-col gap-4 overflow-visible text-[var(--ink)]"
+        className={`album-overlay__panel relative z-10 flex w-full flex-col overflow-visible text-[var(--ink)]${
+          isFilm
+            ? " album-overlay__panel--film max-h-[min(96svh,980px)] gap-3"
+            : " max-h-[min(92svh,920px)] max-w-5xl gap-4"
+        }`}
       >
         <div className="album-overlay__header flex items-center justify-between gap-4 px-3">
           <div className="min-w-0 overflow-visible">
@@ -324,7 +341,10 @@ export function AlbumOverlay({
           </button>
         </div>
 
-        <div key={panelKey} className="album-overlay__stage flex min-h-0 flex-1 flex-col overflow-visible">
+        <div
+          key={panelKey}
+          className="album-overlay__stage flex min-h-0 flex-1 flex-col overflow-visible"
+        >
           {level === "albums" ? (
             <div className="album-overlay__scroll min-h-0 h-full">
               <div className="flex flex-wrap items-start justify-center gap-10 px-3 md:gap-16">
@@ -348,152 +368,53 @@ export function AlbumOverlay({
             </div>
           ) : null}
 
-          {level === "photos" && current ? (
-            <div className="album-overlay__scroll min-h-0 h-full">
-              <div className="flex flex-wrap items-start justify-center gap-8 px-3 md:gap-12">
-                {current.photos.map((photo, index) => (
-                  <button
-                    key={photo.slug}
-                    type="button"
-                    onClick={() => openPhoto(photo)}
-                    tabIndex={open ? 0 : -1}
-                    className="album-overlay__item group w-[min(42vw,200px)] shrink-0 overflow-visible text-left md:w-[min(22vw,220px)]"
-                    style={{ ["--i" as string]: index }}
-                  >
-                    <div
-                      className={`relative w-full overflow-hidden bg-[#221c16]/80 ${photoAspectClass(photo.span)}`}
-                    >
-                      <Still
-                        src={photo.src}
-                        alt={photo.alt}
-                        sizes="(max-width: 768px) 42vw, 220px"
-                        reveal={false}
-                      />
-                    </div>
-                    <div className="album-overlay__caption mt-2 flex items-baseline justify-end gap-2 overflow-visible px-1">
-                      <span data-album-drift>{photo.year}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {level === "photo" && current && active ? (
-            <div className="album-overlay__item flex h-full min-h-0 w-full flex-col items-center gap-2.5">
-              <div className="flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden">
-                <div
-                  key={active.slug}
-                  className="album-overlay__photo relative overflow-hidden"
-                  style={{
-                    aspectRatio: photoAspect(active.span),
-                    width:
-                      active.span === "wide"
-                        ? "min(100%, calc((92svh - 9rem) * 3 / 2))"
-                        : active.span === "square"
-                          ? "min(100%, calc(92svh - 9rem))"
-                          : "min(100%, calc((92svh - 9rem) * 3 / 4))",
-                    maxHeight: "calc(92svh - 9rem)",
-                    maxWidth: "100%",
-                    height: "auto",
-                  }}
-                >
-                  <Image
-                    src={active.src}
-                    alt={active.alt}
-                    fill
-                    priority
-                    quality={95}
-                    sizes="(max-width: 768px) 90vw, 720px"
-                    className="object-contain"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => step(-1)}
-                    tabIndex={open ? 0 : -1}
-                    className="absolute top-1/2 left-1 z-10 -translate-y-1/2 p-1.5 text-[#f7f0e4] drop-shadow-[0_1px_4px_rgb(0_0_0_/_0.55)] transition-opacity hover:opacity-70"
-                    aria-label="Previous photograph"
-                  >
-                    <svg
-                      width="22"
-                      height="22"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      aria-hidden
-                    >
-                      <path
-                        d="M15 5L8 12L15 19"
-                        stroke="currentColor"
-                        strokeWidth="1.75"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => step(1)}
-                    tabIndex={open ? 0 : -1}
-                    className="absolute top-1/2 right-1 z-10 -translate-y-1/2 p-1.5 text-[#f7f0e4] drop-shadow-[0_1px_4px_rgb(0_0_0_/_0.55)] transition-opacity hover:opacity-70"
-                    aria-label="Next photograph"
-                  >
-                    <svg
-                      width="22"
-                      height="22"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      aria-hidden
-                    >
-                      <path
-                        d="M9 5L16 12L9 19"
-                        stroke="currentColor"
-                        strokeWidth="1.75"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
+          {isFilm && current && active ? (
+            <div className="album-overlay__film-wrap flex min-h-0 flex-1 flex-col">
               <div
-                className="album-overlay__strip relative z-10 flex h-11 w-full shrink-0 items-center justify-center gap-1.5"
+                ref={filmRef}
+                className="album-overlay__film"
                 aria-label="Photographs in this series"
               >
-                {current.photos.map((photo) => {
-                  const isActive = photo.slug === active.slug;
-                  const thumb =
-                    photo.span === "wide"
-                      ? { width: 36, height: 24 }
-                      : photo.span === "square"
-                        ? { width: 28, height: 28 }
-                        : { width: 28, height: 36 };
-                  return (
-                    <button
-                      key={photo.slug}
-                      type="button"
-                      onClick={() => setActive(photo)}
-                      tabIndex={open ? 0 : -1}
-                      className={`album-overlay__thumb relative block shrink-0 overflow-hidden transition-opacity duration-200 ${
-                        isActive
-                          ? "opacity-100 ring-1 ring-[#f7f0e4]/70"
-                          : "opacity-45 hover:opacity-80"
-                      }`}
-                      style={thumb}
-                      aria-label={photo.alt}
-                      aria-current={isActive ? "true" : undefined}
-                    >
-                      <Image
-                        src={photo.src}
-                        alt=""
-                        width={thumb.width}
-                        height={thumb.height}
-                        sizes={`${thumb.width}px`}
-                        className="h-full w-full object-cover"
-                      />
-                    </button>
-                  );
-                })}
+                <div className="album-overlay__film-track">
+                  {current.photos.map((photo, index) => {
+                    const isActive = photo.slug === active.slug;
+                    return (
+                      <button
+                        key={photo.slug}
+                        type="button"
+                        data-film-slug={photo.slug}
+                        onClick={() => focusShot(photo)}
+                        tabIndex={open ? 0 : -1}
+                        className={`album-overlay__film-shot${
+                          isActive ? " is-active" : ""
+                        }`}
+                        style={{
+                          ["--i" as string]: index,
+                          width: filmShotWidth(photo.span),
+                        }}
+                        aria-label={photo.alt}
+                        aria-current={isActive ? "true" : undefined}
+                      >
+                        <span
+                          className={`album-overlay__film-frame relative block w-full overflow-hidden bg-[#221c16] ${photoAspectClass(photo.span)}`}
+                        >
+                          <Image
+                            src={photo.src}
+                            alt={photo.alt}
+                            fill
+                            priority={isActive || index < 3}
+                            quality={90}
+                            sizes="(max-width: 768px) 72vw, 520px"
+                            className="object-cover"
+                          />
+                        </span>
+                        <span className="album-overlay__caption mt-2 flex justify-end overflow-visible px-1">
+                          <span data-album-drift>{photo.year}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           ) : null}
