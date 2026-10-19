@@ -1,5 +1,4 @@
 import { About } from "@/components/About";
-import { AlbumHost } from "@/components/AlbumHost";
 import { Hero } from "@/components/Hero";
 import { PageTint } from "@/components/PageTint";
 import { SeriesExpandHost } from "@/components/SeriesExpand";
@@ -19,7 +18,6 @@ export default function Home() {
         <About />
       </StoryShell>
       <SeriesExpandHost />
-      <AlbumHost />
     </>
   );
 }

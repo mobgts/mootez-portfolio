@@ -563,7 +563,7 @@ export function Spiral3DSlider({
       role="region"
       aria-label={ariaLabel}
       className={cn(
-        "spiral-3d-slider relative min-h-[42rem] w-full overflow-hidden bg-transparent",
+        "spiral-3d-slider relative min-h-[14rem] w-full overflow-hidden bg-transparent",
         className,
       )}
       onWheel={handleWheel}

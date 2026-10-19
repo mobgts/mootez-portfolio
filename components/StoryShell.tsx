@@ -6,7 +6,7 @@ import { AnimatedGradient, type GradientConfig } from "@/components/ui/animated-
 const GRADIENT_CONFIG: GradientConfig = {
   preset: "custom",
   color1: "#fcfaf7",
-  color2: "#9aa38e",
+  color2: "#8f9250",
   color3: "#f9f5ef",
   rotation: -45,
   proportion: 60,
@@ -48,7 +48,7 @@ export function StoryShell({ children }: { children: ReactNode }) {
           introFromSides
           introDelay={0.75}
           introDuration={3.2}
-          cursorRipple={5}
+          cursorRipple={7}
         />
       </div>
       <div className="story-page__content relative z-10">{children}</div>

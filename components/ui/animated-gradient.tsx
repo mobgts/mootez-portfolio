@@ -374,8 +374,10 @@ export function AnimatedGradient({
             };
 
             const stepWaves = () => {
-                if (Number.isFinite(pointer.x) && Number.isFinite(prevPointer.x)) {
+                if (Number.isFinite(pointer.x)) {
+                    const firstContact = !Number.isFinite(prevPointer.x);
                     const moved =
+                        firstContact ||
                         Math.abs(pointer.x - prevPointer.x) > 0.1 ||
                         Math.abs(pointer.y - prevPointer.y) > 0.1;
                     if (moved) {
@@ -427,12 +429,35 @@ export function AnimatedGradient({
                 gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
             };
 
-            const onPointerMove = (event: PointerEvent) => {
+            const setPointerFromClient = (clientX: number, clientY: number) => {
                 const rect = container.getBoundingClientRect();
-                pointer = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+                pointer = { x: clientX - rect.left, y: clientY - rect.top };
+            };
+            const onPointerMove = (event: PointerEvent) => {
+                setPointerFromClient(event.clientX, event.clientY);
+            };
+            // Touch: stamp on contact + drag — phones rarely fire hover moves.
+            const onPointerDown = (event: PointerEvent) => {
+                if (event.pointerType === "mouse") return;
+                setPointerFromClient(event.clientX, event.clientY);
+                prevPointer = { x: Number.NaN, y: Number.NaN };
+            };
+            const onPointerUp = (event: PointerEvent) => {
+                if (event.pointerType === "mouse") return;
+                prevPointer = { x: Number.NaN, y: Number.NaN };
+                pointer = { x: Number.NaN, y: Number.NaN };
+            };
+            const onTouchMove = (event: TouchEvent) => {
+                const touch = event.touches[0];
+                if (!touch) return;
+                setPointerFromClient(touch.clientX, touch.clientY);
             };
             if (rippleOn) {
                 window.addEventListener("pointermove", onPointerMove, { passive: true });
+                window.addEventListener("pointerdown", onPointerDown, { passive: true });
+                window.addEventListener("pointerup", onPointerUp, { passive: true });
+                window.addEventListener("pointercancel", onPointerUp, { passive: true });
+                window.addEventListener("touchmove", onTouchMove, { passive: true });
             }
             const useIntro = introFromSides && !reduceMotion;
             const introLen = Math.max(introDuration, 0.01);
@@ -519,6 +544,10 @@ export function AnimatedGradient({
                 }
                 resizeObserver.disconnect();
                 window.removeEventListener("pointermove", onPointerMove);
+                window.removeEventListener("pointerdown", onPointerDown);
+                window.removeEventListener("pointerup", onPointerUp);
+                window.removeEventListener("pointercancel", onPointerUp);
+                window.removeEventListener("touchmove", onTouchMove);
                 gl.deleteTexture(dispTexture);
                 gl.deleteProgram(program);
                 gl.deleteShader(vertexShader);

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { albums } from "@/content/photos";
-import { openAlbum } from "@/content/albumUi";
+import { openSeriesExpand } from "@/content/seriesExpandUi";
 import { site } from "@/content/site";
 import { onNavSectionClick } from "@/lib/navScroll";
 
@@ -46,11 +46,12 @@ export function StudioRail() {
 
     const specs: DriftSpec[] = items.map((el, i) => {
       const album = el.classList.contains("studio-rail__album-drift");
+      const brand = el.classList.contains("studio-rail__name");
       return {
         el,
-        ampX: album ? 1.8 : 2.6 + (i % 3) * 1.1,
-        ampY: album ? 1.6 : 2.0 + (i % 4) * 0.9,
-        ampR: album ? 0.35 : 0.45 + (i % 3) * 0.22,
+        ampX: brand ? 4.8 : album ? 1.8 : 2.6 + (i % 3) * 1.1,
+        ampY: brand ? 3.8 : album ? 1.6 : 2.0 + (i % 4) * 0.9,
+        ampR: brand ? 0.75 : album ? 0.35 : 0.45 + (i % 3) * 0.22,
         speedX: 0.00028 + i * 0.00005,
         speedY: 0.00022 + i * 0.00007,
         speedR: 0.00018 + i * 0.00004,
@@ -58,7 +59,7 @@ export function StudioRail() {
         phaseY: i * 2.41,
         phaseR: i * 1.19,
         biasX: 0,
-        biasY: album ? -0.8 : 0,
+        biasY: brand ? -1.2 : album ? -0.8 : 0,
       };
     });
 
@@ -147,7 +148,7 @@ export function StudioRail() {
                                 <button
                                   type="button"
                                   tabIndex={imageOpen ? 0 : -1}
-                                  onClick={() => openAlbum(album.id)}
+                                  onClick={() => openSeriesExpand(album.id)}
                                   style={{ ["--i" as string]: albumIndex }}
                                 >
                                   {album.label.replace(/^series:\s*/i, "")}

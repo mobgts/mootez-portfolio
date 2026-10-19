@@ -11,6 +11,8 @@
   --cream: #fcfaf7;
   --olive: #8f9250;
   --olive-deep: #5b5c2f;
+  --beige: #b8a78a;
+  --beige-deep: #8f7f66;
   --sage: #9aa78c;
   --tint-wash: rgb(252 250 247 / 0.28);
   --tint-nav: rgb(252 250 247 / 0.92);
@@ -25,6 +27,8 @@
   --color-cream: var(--cream);
   --color-olive: var(--olive);
   --color-olive-deep: var(--olive-deep);
+  --color-beige: var(--beige);
+  --color-beige-deep: var(--beige-deep);
   --color-sage: var(--sage);
   --color-lavender: var(--lavender);
   --color-lavender-deep: var(--lavender-deep);
@@ -58,6 +62,9 @@ body {
 }
 
 .story-about {
+  position: relative;
+  z-index: 20;
+  margin-top: -100svh;
   color: var(--ink);
 }
 
@@ -65,54 +72,60 @@ body {
   color: color-mix(in srgb, var(--ink) 55%, transparent);
 }
 
-@media (min-width: 768px) {
-  .story-about {
-    position: relative;
-    z-index: 20;
-    margin-top: -100svh;
-  }
+.about-handoff {
+  position: relative;
+  width: 100%;
+}
 
+.about-handoff__sticky {
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100svh;
+  /* clip: hide sliding bands without creating a scrollport that kills sticky. */
+  overflow: clip;
+}
+
+.about-handoff__band {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(100%, 64rem);
+  margin: 0;
+  transform: translate3d(-50%, -50%, 0);
+  will-change: transform, opacity;
+}
+
+/* Phone: denser bands; JS pins them fixed and scrubs the album axis. */
+@media (max-width: 767px) {
   .about-handoff {
-    position: relative;
-    width: 100%;
-  }
-
-  .about-handoff__sticky {
-    position: sticky;
-    top: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100svh;
-    overflow: hidden;
+    /* aboutHold + handoff + contactHold + 1 — keep in sync with About.tsx */
+    min-height: 405vh;
   }
 
   .about-handoff__band {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: min(100%, 64rem);
-    margin: 0;
-    transform: translate3d(-50%, -50%, 0);
-    will-change: transform, opacity;
-  }
-}
-
-@media (max-width: 767px) {
-  .about-handoff {
-    height: auto !important;
-    padding: 3rem 0;
+    width: 100%;
+    max-height: 100svh;
+    overflow: clip;
+    padding-top: 3.25rem;
+    padding-bottom: 1rem;
   }
 
-  .about-handoff__sticky {
-    display: flex;
-    flex-direction: column;
-    gap: 3rem;
+  .about-handoff__band--about,
+  .about-handoff__band--contact {
+    align-content: center;
+  }
+
+  .about-handoff__band--about {
+    gap: 1.1rem;
   }
 
   .about-handoff__band--contact {
-    margin-top: 0;
+    gap: 1rem;
   }
 }
 
@@ -233,7 +246,7 @@ html.has-cursor-none * {
 }
 
 .site-nav__brand-soft {
-  color: var(--olive);
+  color: var(--beige);
 }
 
 .site-nav__brand:hover,
@@ -244,7 +257,7 @@ html.has-cursor-none * {
 
 .site-nav__brand:hover .site-nav__brand-soft,
 .site-nav__brand:focus-visible .site-nav__brand-soft {
-  color: color-mix(in srgb, var(--olive-deep) 55%, transparent);
+  color: color-mix(in srgb, var(--beige-deep) 70%, transparent);
 }
 
 .site-nav__links {
@@ -600,7 +613,7 @@ html.has-cursor-none * {
   text-transform: lowercase;
   white-space: nowrap;
   user-select: none;
-  opacity: 0.55;
+  opacity: 1;
   pointer-events: none;
   will-change: transform, opacity;
 }
@@ -637,6 +650,24 @@ html.has-cursor-none * {
   pointer-events: none;
 }
 
+/* Phone: smaller frames + roomy travel so neighbors don't stack on top of each other. */
+@media (max-width: 767px) {
+  .image-series__frame {
+    width: min(52vw, 220px);
+  }
+
+  .image-series__title {
+    font-size: clamp(2.85rem, 18vw, 5.25rem);
+    padding: 0 1.25rem;
+    padding-top: 2.5rem;
+  }
+
+  .image-series__sticky {
+    /* Sit under the fixed mobile nav without clipping the title. */
+    height: 100svh;
+  }
+}
+
 .image-series__frame-inner {
   position: absolute;
   inset: 0;
@@ -649,6 +680,11 @@ html.has-cursor-none * {
   inset: 0;
   display: block;
   overflow: hidden;
+}
+
+/* 4th-slot flipbook: stacked frames cut instantly (no crossfade). */
+.image-series__frame--reel .image-series__photo {
+  transition: none;
 }
 
 .image-series__frame:focus-visible {
@@ -839,19 +875,6 @@ html.series-expand-open .story-page__content {
   }
 }
 
-/* Landing collage - mobile fallback; desktop uses .image-series */
-.hero-collage {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  color: var(--ink);
-  isolation: isolate;
-}
-
-.hero-collage__stage {
-  transform-origin: top left;
-}
-
 .studio-rail {
   position: fixed;
   inset: 0;
@@ -896,7 +919,7 @@ html.series-expand-open .story-page__content {
 }
 
 .studio-rail__name-soft {
-  color: var(--olive);
+  color: var(--beige);
 }
 
 .studio-rail__name:hover,
@@ -907,7 +930,7 @@ html.series-expand-open .story-page__content {
 
 .studio-rail__name:hover .studio-rail__name-soft,
 .studio-rail__name:focus-visible .studio-rail__name-soft {
-  color: color-mix(in srgb, var(--olive-deep) 55%, transparent);
+  color: color-mix(in srgb, var(--beige-deep) 70%, transparent);
 }
 
 .studio-rail__nav {
@@ -2799,373 +2822,3 @@ html.series-expand-open .story-page__content {
     font-size: 12px;
   }
 }
-
-/* -- Album overlay -- */
-.album-overlay {
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 320ms ease;
-}
-
-.album-overlay.is-open {
-  pointer-events: auto;
-  opacity: 1;
-}
-
-.album-overlay__backdrop {
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-  /* Silk stays visible underneath - only a light wash for contrast */
-  background: rgb(14 12 10 / 0.18);
-  opacity: 0;
-  transition: opacity 360ms ease;
-}
-
-.album-overlay.is-open .album-overlay__backdrop {
-  opacity: 1;
-}
-
-.album-overlay__panel {
-  opacity: 0;
-  transform: translateY(10px) scale(0.985);
-  transition:
-    opacity 360ms ease 40ms,
-    transform 420ms cubic-bezier(0.22, 1, 0.36, 1) 40ms;
-}
-
-.album-overlay.is-open .album-overlay__panel {
-  opacity: 1;
-  transform: none;
-}
-
-.album-overlay__title,
-.album-overlay__back,
-.album-overlay__caption {
-  font-family: var(--font-sans-face), "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  line-height: 1.2;
-  text-transform: none;
-}
-
-.album-overlay__header {
-  overflow: visible;
-  padding-inline: 0.75rem;
-}
-
-.album-overlay__back {
-  border: 0;
-  padding: 0.2rem 0.5rem;
-  margin-inline-end: -0.25rem;
-  background: none;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  line-height: 1.2;
-  text-align: right;
-  overflow: visible;
-}
-
-.album-overlay__title {
-  overflow: visible;
-}
-
-.album-overlay__subtitle,
-.album-overlay__caption {
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  line-height: 1.3;
-  overflow: visible;
-}
-
-.album-overlay__subtitle {
-  color: color-mix(in srgb, var(--ink) 62%, transparent);
-}
-
-.album-overlay [data-album-drift] {
-  display: inline-block;
-  transform: translate3d(0, 0, 0);
-  will-change: transform;
-}
-
-.album-overlay__item {
-  animation: album-item-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: calc(var(--i, 0) * 45ms);
-  overflow: visible;
-}
-
-.album-overlay__photo {
-  animation: album-photo-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-/* Milligan expand: titles rise, film opens underneath side-by-side */
-.album-overlay.is-film {
-  align-items: flex-start;
-  justify-content: flex-start;
-  padding: clamp(1rem, 3.5vh, 2.25rem) 0 1.5rem;
-}
-
-.album-overlay.is-film .album-overlay__header {
-  padding-inline: clamp(1rem, 3vw, 2rem);
-  animation: album-title-up 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.album-overlay.is-film .album-overlay__panel--film {
-  max-width: 100%;
-  width: 100%;
-  min-height: min(84svh, 900px);
-}
-
-.album-overlay__film-wrap {
-  min-height: 0;
-  width: 100%;
-  flex: 1;
-}
-
-.album-overlay__film {
-  width: 100%;
-  height: 100%;
-  min-height: min(70svh, 720px);
-  padding: 0.5rem clamp(1rem, 3vw, 2rem) 1.5rem;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x proximity;
-  scrollbar-width: thin;
-  scrollbar-color: #8e8e8e transparent;
-  -webkit-overflow-scrolling: touch;
-}
-
-.album-overlay__film-track {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: flex-start;
-  gap: clamp(1rem, 2.4vw, 2rem);
-  width: max-content;
-  min-height: 100%;
-}
-
-.album-overlay__film-gap {
-  flex: 0 0 auto;
-  width: 100vw;
-  min-height: 1px;
-  pointer-events: none;
-}
-
-.album-overlay__film::-webkit-scrollbar {
-  height: 10px;
-}
-
-.album-overlay__film::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.album-overlay__film::-webkit-scrollbar-thumb {
-  background: #8e8e8e;
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-.album-overlay__film-shot {
-  flex: 0 0 auto;
-  border: 0;
-  padding: 0;
-  margin: 0;
-  background: none;
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-  scroll-snap-align: center;
-  animation: album-film-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: calc(80ms + var(--i, 0) * 55ms);
-}
-
-.album-overlay__film-shot.is-loop-clone {
-  animation: none;
-}
-
-/* Extra breath between series in the continuous strip */
-.album-overlay__film-shot.is-album-start {
-  margin-left: clamp(1.5rem, 4vw, 3.5rem);
-}
-
-.album-overlay__film-frame {
-  max-height: min(68svh, 700px);
-  filter: brightness(0.88);
-  transition: filter 280ms ease;
-}
-
-.album-overlay__film-shot.is-active .album-overlay__film-frame,
-.album-overlay__film-shot:hover .album-overlay__film-frame {
-  filter: none;
-}
-
-.album-overlay__film-frame img {
-  max-height: min(68svh, 700px);
-}
-
-/* Album scroll: white track, grey pill thumb, arrow buttons */
-.album-overlay__scroll {
-  scrollbar-width: thin;
-  scrollbar-color: #8e8e8e #ffffff;
-  padding-inline: 0.85rem;
-  overflow-y: auto;
-}
-
-.album-overlay__scroll::-webkit-scrollbar {
-  width: 14px;
-}
-
-.album-overlay__scroll::-webkit-scrollbar-track {
-  background: #ffffff;
-  border-radius: 999px;
-}
-
-.album-overlay__scroll::-webkit-scrollbar-thumb {
-  background: #8e8e8e;
-  border-radius: 999px;
-  border: 3px solid #ffffff;
-  background-clip: padding-box;
-}
-
-.album-overlay__scroll::-webkit-scrollbar-thumb:hover {
-  background: #6f6f6f;
-  border: 3px solid #ffffff;
-  background-clip: padding-box;
-}
-
-.album-overlay__scroll::-webkit-scrollbar-button:single-button {
-  display: block;
-  height: 14px;
-  width: 14px;
-  background-color: #ffffff;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 7px 5px;
-}
-
-.album-overlay__scroll::-webkit-scrollbar-button:single-button:vertical:decrement {
-  border-radius: 999px 999px 0 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='5' viewBox='0 0 7 5'%3E%3Cpath fill='%23555555' d='M3.5 0L7 5H0z'/%3E%3C/svg%3E");
-}
-
-.album-overlay__scroll::-webkit-scrollbar-button:single-button:vertical:increment {
-  border-radius: 0 0 999px 999px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='5' viewBox='0 0 7 5'%3E%3Cpath fill='%23555555' d='M0 0h7L3.5 5z'/%3E%3C/svg%3E");
-}
-
-.album-overlay__scroll::-webkit-scrollbar-corner {
-  background: transparent;
-}
-
-@keyframes album-item-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes album-photo-in {
-  from {
-    opacity: 0;
-    transform: scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes album-title-up {
-  from {
-    opacity: 0;
-    transform: translateY(28px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes album-film-in {
-  from {
-    opacity: 0;
-    transform: translateY(36px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes album-title-up {
-  from {
-    opacity: 0;
-    transform: translateY(28px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes album-film-in {
-  from {
-    opacity: 0;
-    transform: translateY(36px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* Album open: only the moving silk remains, softened; hide all page chrome */
-.story-page__content {
-  transition: opacity 320ms ease;
-}
-
-html.album-open .story-page__content {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition:
-    opacity 280ms ease,
-    visibility 0s linear 280ms;
-}
-
-html.album-open .hero-warp {
-  filter: blur(10px) saturate(0.95);
-  transform: scale(1.03);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .album-overlay,
-  .album-overlay__backdrop,
-  .album-overlay__panel,
-  html.album-open .story-page__content,
-  .hero-warp {
-    transition: none;
-  }
-
-  .album-overlay__item,
-  .album-overlay__photo,
-  .album-overlay.is-film .album-overlay__header,
-  .album-overlay__film-shot {
-    animation: none;
-  }
-
-}
-

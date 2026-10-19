@@ -10,6 +10,13 @@ const HANDOFF_VH = ALBUM_GAP_SLOTS * SCROLL_VH;
 const CONTACT_HOLD_VH = 0.08;
 const HANDOFF_TRACK_VH = ABOUT_HOLD_VH + HANDOFF_VH + CONTACT_HOLD_VH;
 
+/** Mobile runway — longer so touch momentum still shows the slide. */
+const MOBILE_ABOUT_HOLD_VH = 0.2;
+const MOBILE_HANDOFF_VH = 2.6;
+const MOBILE_CONTACT_HOLD_VH = 0.25;
+const MOBILE_HANDOFF_TRACK_VH =
+  MOBILE_ABOUT_HOLD_VH + MOBILE_HANDOFF_VH + MOBILE_CONTACT_HOLD_VH;
+
 /** About ↔ Contact nav — same axis as scroll handoff. */
 const HANDOFF_NAV_MS = 820;
 
@@ -21,6 +28,27 @@ function clamp01(n: number) {
 
 function easeInOutCubic(t: number) {
   return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+}
+
+function isMobile() {
+  return window.matchMedia("(max-width: 767px)").matches;
+}
+
+function track() {
+  if (isMobile()) {
+    return {
+      aboutHold: MOBILE_ABOUT_HOLD_VH,
+      handoff: MOBILE_HANDOFF_VH,
+      contactHold: MOBILE_CONTACT_HOLD_VH,
+      total: MOBILE_HANDOFF_TRACK_VH,
+    };
+  }
+  return {
+    aboutHold: ABOUT_HOLD_VH,
+    handoff: HANDOFF_VH,
+    contactHold: CONTACT_HOLD_VH,
+    total: HANDOFF_TRACK_VH,
+  };
 }
 
 function aboutPanel() {
@@ -38,6 +66,7 @@ function sectionTop(id: JumpSection) {
   if (panel) {
     const panelDocTop = panel.getBoundingClientRect().top + window.scrollY;
     const travel = Math.max(panel.offsetHeight - viewH, 1);
+    const t = track();
 
     if (id === "about") {
       // Lock About sticky at the start of the hold.
@@ -45,8 +74,8 @@ function sectionTop(id: JumpSection) {
     }
 
     // Contact centered: just after the About → Contact handoff.
-    const targetScrolled = ABOUT_HOLD_VH + HANDOFF_VH;
-    return panelDocTop + (targetScrolled / HANDOFF_TRACK_VH) * travel;
+    const targetScrolled = t.aboutHold + t.handoff;
+    return panelDocTop + (targetScrolled / t.total) * travel;
   }
 
   const el = document.getElementById(id);
@@ -57,7 +86,6 @@ function sectionTop(id: JumpSection) {
 
 /** True while the album sticky still covers the viewport. */
 function seriesCoveringView() {
-  if (!window.matchMedia("(min-width: 768px)").matches) return false;
   const sticky = document.querySelector<HTMLElement>(".image-series__sticky");
   if (!sticky) return false;
   if (sticky.style.visibility === "hidden") return false;
@@ -71,7 +99,8 @@ function seriesCoveringView() {
 function aboutHandoffOwnsView() {
   const panel = aboutPanel();
   if (!panel) return false;
-  if (panel.getBoundingClientRect().top > 1) return false;
+  // Match About.tsx sticky threshold (mobile chrome rarely hits exact 0).
+  if (panel.getBoundingClientRect().top > 16) return false;
   if (seriesCoveringView()) return false;
   return true;
 }
@@ -82,7 +111,6 @@ function seriesStillActive() {
 
   const panel = document.querySelector<HTMLElement>(".image-series__panel");
   if (!panel) return false;
-  if (!window.matchMedia("(min-width: 768px)").matches) return false;
   const rect = panel.getBoundingClientRect();
   return (
     rect.top < window.innerHeight * 0.15 &&
@@ -100,8 +128,9 @@ export function currentNavZone(): NavZone {
     const top = panel.getBoundingClientRect().top;
     const total = Math.max(panel.offsetHeight - viewH, 1);
     const progress = clamp01(-top / total);
-    const scrolled = progress * HANDOFF_TRACK_VH;
-    if (scrolled < ABOUT_HOLD_VH + HANDOFF_VH * 0.5) return "about";
+    const t = track();
+    const scrolled = progress * t.total;
+    if (scrolled < t.aboutHold + t.handoff * 0.5) return "about";
     return "contact";
   }
 

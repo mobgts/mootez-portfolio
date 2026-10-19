@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { albums } from "@/content/photos";
-import { openAlbum } from "@/content/albumUi";
+import { openSeriesExpand } from "@/content/seriesExpandUi";
 import { site } from "@/content/site";
 import { onNavSectionClick } from "@/lib/navScroll";
 
@@ -46,11 +46,12 @@ export function StickyNav() {
 
     const specs: DriftSpec[] = items.map((el, i) => {
       const album = el.classList.contains("site-nav__album-drift");
+      const brand = el.classList.contains("site-nav__brand-drift");
       return {
         el,
-        ampX: album ? 1.6 : 2.2 + (i % 3) * 1.0,
-        ampY: album ? 1.4 : 1.8 + (i % 4) * 0.8,
-        ampR: album ? 0.3 : 0.4 + (i % 3) * 0.2,
+        ampX: brand ? 4.2 : album ? 1.6 : 2.2 + (i % 3) * 1.0,
+        ampY: brand ? 3.4 : album ? 1.4 : 1.8 + (i % 4) * 0.8,
+        ampR: brand ? 0.7 : album ? 0.3 : 0.4 + (i % 3) * 0.2,
         speedX: 0.00028 + i * 0.00005,
         speedY: 0.00022 + i * 0.00007,
         speedR: 0.00018 + i * 0.00004,
@@ -58,7 +59,7 @@ export function StickyNav() {
         phaseY: i * 2.41,
         phaseR: i * 1.19,
         biasX: 0,
-        biasY: album ? -0.6 : 0,
+        biasY: brand ? -1.0 : album ? -0.6 : 0,
       };
     });
 
@@ -144,7 +145,7 @@ export function StickyNav() {
                                 <button
                                   type="button"
                                   tabIndex={imageOpen ? 0 : -1}
-                                  onClick={() => openAlbum(album.id)}
+                                  onClick={() => openSeriesExpand(album.id)}
                                   style={{ ["--i" as string]: albumIndex }}
                                 >
                                   {album.label.replace(/^series:\s*/i, "")}

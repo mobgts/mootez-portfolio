@@ -35,15 +35,42 @@ const CONTACT_HOLD_VH = 0.08;
 /** Sticky travel + one viewport (same runway pattern as ImageSeries). */
 const RUNWAY_VH = ABOUT_HOLD_VH + HANDOFF_VH + CONTACT_HOLD_VH + 1;
 
+/** Mobile: longer scrub so touch momentum still shows the slide. */
+const MOBILE_ABOUT_HOLD_VH = 0.2;
+const MOBILE_HANDOFF_VH = 2.6;
+const MOBILE_CONTACT_HOLD_VH = 0.25;
+const MOBILE_RUNWAY_VH =
+  MOBILE_ABOUT_HOLD_VH + MOBILE_HANDOFF_VH + MOBILE_CONTACT_HOLD_VH + 1;
+
 function clamp01(n: number) {
   return Math.min(1, Math.max(0, n));
 }
 
+function clearBandPin(el: HTMLElement) {
+  el.style.position = "";
+  el.style.top = "";
+  el.style.left = "";
+  el.style.right = "";
+  el.style.width = "";
+  el.style.maxWidth = "";
+  el.style.paddingLeft = "";
+  el.style.paddingRight = "";
+  el.style.zIndex = "";
+  el.style.willChange = "";
+  el.style.transform = "";
+  el.style.opacity = "";
+  el.style.visibility = "";
+  el.style.pointerEvents = "";
+}
+
+/**
+ * Same motion as ImageSeries frames: slide on X, slight arc/rotate/scale, fade.
+ * mirrorX: leave goes left / enter comes from right (About → Contact).
+ */
 function paintBand(
   el: HTMLElement,
   delta: number,
   spacing: number,
-  /** Flip album x so leave goes left / enter comes from right. */
   mirrorX: boolean,
 ) {
   const sign = mirrorX ? -1 : 1;
@@ -53,11 +80,26 @@ function paintBand(
   const y = arc * arc * 26;
   const rot = sign * delta * 2.8;
   const scale = 1 - Math.min(abs, 1.25) * 0.12;
-  const opacity = abs < 0.08 ? 1 : Math.max(0, 1 - abs * 0.95);
+  // Keep mid-travel readable (desktop album curve is steeper; phone needs more signal).
+  const opacity = abs < 0.08 ? 1 : Math.max(0, 1 - abs * 0.72);
   el.style.transform = `translate3d(calc(-50% + ${x.toFixed(2)}px), calc(-50% + ${y.toFixed(2)}px), 0) rotate(${rot.toFixed(3)}deg) scale(${scale.toFixed(4)})`;
   el.style.opacity = opacity.toFixed(3);
+  el.style.visibility = opacity <= 0.01 ? "hidden" : "visible";
   el.style.zIndex = String(Math.round(40 - abs * 10));
   el.style.pointerEvents = abs < 0.35 ? "auto" : "none";
+}
+
+/** Viewport-pin both bands so the axis scrub doesn't depend on sticky sticking. */
+function pinBandFixed(el: HTMLElement, mobile: boolean) {
+  el.style.position = "fixed";
+  el.style.top = "50%";
+  el.style.left = "50%";
+  el.style.right = "auto";
+  el.style.width = mobile ? "100%" : "min(100%, 64rem)";
+  el.style.maxWidth = mobile ? "100%" : "64rem";
+  el.style.zIndex = "30";
+  el.style.willChange = "transform, opacity";
+  el.style.margin = "0";
 }
 
 export function About() {
@@ -84,69 +126,93 @@ export function About() {
       duration: number;
     } = null;
 
-    const handoffTFromScroll = () => {
+    const trackVh = (mobile: boolean) => {
+      if (mobile) {
+        return {
+          aboutHold: MOBILE_ABOUT_HOLD_VH,
+          handoff: MOBILE_HANDOFF_VH,
+          contactHold: MOBILE_CONTACT_HOLD_VH,
+        };
+      }
+      return {
+        aboutHold: ABOUT_HOLD_VH,
+        handoff: HANDOFF_VH,
+        contactHold: CONTACT_HOLD_VH,
+      };
+    };
+
+    const handoffTFromScroll = (mobile: boolean) => {
       const viewH = window.innerHeight;
       const top = panel.getBoundingClientRect().top;
       const total = Math.max(panel.offsetHeight - viewH, 1);
       const progress = clamp01(-top / total);
-      const scrolled =
-        progress * (ABOUT_HOLD_VH + HANDOFF_VH + CONTACT_HOLD_VH);
-      if (scrolled <= ABOUT_HOLD_VH) return 0;
-      if (scrolled >= ABOUT_HOLD_VH + HANDOFF_VH) return 1;
-      return (scrolled - ABOUT_HOLD_VH) / HANDOFF_VH;
+      const { aboutHold, handoff, contactHold } = trackVh(mobile);
+      const track = aboutHold + handoff + contactHold;
+      const scrolled = progress * track;
+      if (scrolled <= aboutHold) return 0;
+      if (scrolled >= aboutHold + handoff) return 1;
+      return (scrolled - aboutHold) / handoff;
     };
 
     const paint = (now = performance.now()) => {
-      const desktop = window.matchMedia("(min-width: 768px)").matches;
-      if (!desktop) {
-        aboutEl.style.transform = "";
-        aboutEl.style.opacity = "";
-        aboutEl.style.zIndex = "";
-        aboutEl.style.pointerEvents = "";
-        contactEl.style.transform = "";
-        contactEl.style.opacity = "";
-        contactEl.style.zIndex = "";
-        contactEl.style.pointerEvents = "";
-        return;
-      }
-
-      const spacing = Math.min(window.innerWidth * 0.44, 520);
+      const mobile = window.matchMedia("(max-width: 767px)").matches;
+      // Match album spacing — full-width travel so enter/leave clear the screen.
+      const spacing = mobile
+        ? Math.min(window.innerWidth * 0.88, 380)
+        : Math.min(window.innerWidth * 0.44, 520);
+      const viewH = window.innerHeight;
       const top = panel.getBoundingClientRect().top;
+      const total = Math.max(panel.offsetHeight - viewH, 1);
+      const inRunway = top <= 16 && top > -total + 1;
 
-      // Series owns the handoff (scroll leave or nav jump) — don't overwrite pins.
-      if (document.documentElement.dataset.aboutFromSeries === "1") {
-        return;
-      }
-
-      // Sticky not locked yet (or released on scroll-up) — don't paint About
-      // ourselves or it flashes for a frame before series reclaims it.
-      if (top > 1 && !navHandoff) {
-        paintBand(contactEl, -VISUAL_STEP_GAP, spacing, true);
-        return;
-      }
-
-      // Series sticky still covering the viewport — keep About invisible so it
-      // can't peek through from document flow under a fading album.
       const seriesSticky = document.querySelector<HTMLElement>(
         ".image-series__sticky",
       );
       const seriesCovering =
         !!seriesSticky &&
         seriesSticky.style.visibility !== "hidden" &&
-        seriesSticky.getBoundingClientRect().bottom > window.innerHeight * 0.35;
+        seriesSticky.getBoundingClientRect().bottom > viewH * 0.35;
+
+      // Series owns the rise pin until chrome is gone.
+      if (document.documentElement.dataset.aboutFromSeries === "1") {
+        if (!(inRunway && !seriesCovering)) return;
+        delete document.documentElement.dataset.aboutFromSeries;
+      }
+
+      // Before About locks — park Contact off-screen to the right (album enter pose).
+      if (!inRunway && !navHandoff) {
+        if (top > 16) {
+          // Don't touch About — series may still own its arrive pin.
+          if (mobile) pinBandFixed(contactEl, true);
+          else if (contactEl.style.position === "fixed") clearBandPin(contactEl);
+          paintBand(contactEl, -VISUAL_STEP_GAP, spacing, true);
+        } else {
+          // Past the runway — settle Contact; About parked off-left.
+          clearBandPin(aboutEl);
+          clearBandPin(contactEl);
+          aboutEl.style.transform = `translate3d(calc(-50% - ${(VISUAL_STEP_GAP * spacing).toFixed(2)}px), -50%, 0)`;
+          aboutEl.style.opacity = "0";
+          aboutEl.style.visibility = "hidden";
+          aboutEl.style.pointerEvents = "none";
+          contactEl.style.transform = "translate3d(-50%, -50%, 0)";
+          contactEl.style.opacity = "1";
+          contactEl.style.visibility = "visible";
+          contactEl.style.pointerEvents = "auto";
+        }
+        return;
+      }
+
+      // Album still covering — don't let About peek.
       if (seriesCovering && !navHandoff) {
         aboutEl.style.opacity = "0";
         aboutEl.style.visibility = "hidden";
         aboutEl.style.pointerEvents = "none";
+        if (mobile) pinBandFixed(contactEl, true);
         paintBand(contactEl, -VISUAL_STEP_GAP, spacing, true);
         return;
       }
 
-      if (aboutEl.style.visibility === "hidden") {
-        aboutEl.style.visibility = "";
-      }
-
-      let handoffT = handoffTFromScroll();
+      let handoffT = handoffTFromScroll(mobile);
       if (navHandoff) {
         const raw = clamp01((now - navHandoff.start) / navHandoff.duration);
         const ease =
@@ -158,7 +224,17 @@ export function About() {
 
       const playhead = handoffT * VISUAL_STEP_GAP;
 
-      // Mirror album axis: About leaves left, Contact enters from right.
+      // Mobile: pin to the viewport so the axis scrub doesn't need sticky.
+      // Desktop: CSS sticky + absolute bands already hold the stage.
+      if (mobile) {
+        pinBandFixed(aboutEl, true);
+        pinBandFixed(contactEl, true);
+      } else {
+        // Ensure series fixed-pin is cleared so sticky absolute can own layout.
+        if (aboutEl.style.position === "fixed") clearBandPin(aboutEl);
+        if (contactEl.style.position === "fixed") clearBandPin(contactEl);
+      }
+      // About at 0 → leaves left. Contact at -gap → enters from the right.
       paintBand(aboutEl, playhead - 0, spacing, true);
       paintBand(contactEl, playhead - VISUAL_STEP_GAP, spacing, true);
     };
@@ -166,12 +242,19 @@ export function About() {
     const onNavHandoff = (event: Event) => {
       const detail = (event as CustomEvent<{ to?: string }>).detail;
       const toContact = detail?.to === "contact";
+      const mobile = window.matchMedia("(max-width: 767px)").matches;
+      delete document.documentElement.dataset.aboutFromSeries;
       navHandoff = {
         start: performance.now(),
-        fromT: handoffTFromScroll(),
+        fromT: handoffTFromScroll(mobile),
         toT: toContact ? 1 : 0,
         duration: 820,
       };
+    };
+
+    const syncRunwayHeight = () => {
+      const mobile = window.matchMedia("(max-width: 767px)").matches;
+      panel.style.height = `${(mobile ? MOBILE_RUNWAY_VH : RUNWAY_VH) * 100}vh`;
     };
 
     const tick = (now: number) => {
@@ -179,8 +262,12 @@ export function About() {
       raf = requestAnimationFrame(tick);
     };
 
-    const onResize = () => paint();
+    const onResize = () => {
+      syncRunwayHeight();
+      paint();
+    };
 
+    syncRunwayHeight();
     raf = requestAnimationFrame(tick);
     window.addEventListener("resize", onResize);
     window.addEventListener("about-contact-handoff", onNavHandoff);
@@ -188,6 +275,8 @@ export function About() {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", onResize);
       window.removeEventListener("about-contact-handoff", onNavHandoff);
+      clearBandPin(aboutEl);
+      clearBandPin(contactEl);
     };
   }, []);
 
@@ -206,11 +295,11 @@ export function About() {
           <div
             ref={aboutRef}
             data-about-arrive
-            className="about-handoff__band about-handoff__band--about mx-auto grid w-full max-w-5xl grid-cols-1 items-start gap-x-14 gap-y-12 px-5 md:grid-cols-2 md:gap-y-16 md:px-8 lg:gap-x-16"
+            className="about-handoff__band about-handoff__band--about mx-auto grid w-full max-w-5xl grid-cols-1 items-start gap-x-14 gap-y-5 px-5 md:grid-cols-2 md:gap-y-16 md:px-8 lg:gap-x-16"
           >
             <div
               data-soft-drift="slight"
-              className="relative aspect-[3/2] w-full max-w-[22rem] overflow-hidden md:max-w-none"
+              className="relative aspect-[3/2] w-full max-w-[16rem] overflow-hidden md:max-w-none"
             >
               <AboutPhoto
                 src={heroPhoto.src}
@@ -223,10 +312,10 @@ export function About() {
               <SilkArrive
                 drive={drive}
                 strength={1}
-                className="space-y-5 text-[16px] font-medium leading-[1.5] tracking-[0.01em] md:text-[18px]"
+                className="space-y-3 text-[15px] font-medium leading-[1.45] tracking-[0.01em] md:space-y-5 md:text-[18px] md:leading-[1.5]"
               >
                 <p>{site.about.story}</p>
-                <p className="text-[14px] leading-[1.55] tracking-[0.01em] text-muted md:text-[15px]">
+                <p className="text-[13px] leading-[1.5] tracking-[0.01em] text-muted md:text-[15px] md:leading-[1.55]">
                   {site.about.body}
                 </p>
               </SilkArrive>
@@ -236,7 +325,7 @@ export function About() {
           <div
             ref={contactRef}
             data-contact-block
-            className="about-handoff__band about-handoff__band--contact mx-auto grid w-full max-w-5xl grid-cols-1 items-start gap-x-14 gap-y-12 px-5 md:grid-cols-2 md:gap-y-16 md:px-8 lg:gap-x-16"
+            className="about-handoff__band about-handoff__band--contact mx-auto grid w-full max-w-5xl grid-cols-1 items-start gap-x-14 gap-y-4 px-5 md:grid-cols-2 md:gap-y-16 md:px-8 lg:gap-x-16"
           >
             <div
               id="contact"
@@ -245,14 +334,14 @@ export function About() {
               <SilkArrive
                 drive={drive}
                 strength={1}
-                className="max-w-md space-y-6 text-[22px] font-medium leading-[1.35] tracking-[0.01em] md:max-w-none md:text-[28px]"
+                className="max-w-md space-y-3 text-[20px] font-medium leading-[1.3] tracking-[0.01em] md:max-w-none md:space-y-6 md:text-[28px] md:leading-[1.35]"
               >
                 <p>Interested in working together?</p>
-                <p className="text-[16px] leading-[1.55] tracking-[0.01em] text-muted md:text-[18px]">
+                <p className="text-[14px] leading-[1.5] tracking-[0.01em] text-muted md:text-[18px] md:leading-[1.55]">
                   Have a product or creative project and think we&apos;d be a
                   good fit?
                 </p>
-                <p className="pt-2 text-[13px] font-medium tracking-[0.06em]">
+                <p className="pt-1 text-[12px] font-medium tracking-[0.06em] md:pt-2 md:text-[13px]">
                   Send me an email at{" "}
                   <a
                     href={`mailto:${site.email}`}
@@ -263,7 +352,7 @@ export function About() {
                 </p>
               </SilkArrive>
               <SilkArrive drive={drive} strength={0.7}>
-                <footer className="mt-10 border-t border-ink pt-4 text-[11px] lowercase tracking-[0.16em] md:mt-12">
+                <footer className="mt-6 border-t border-ink pt-3 text-[11px] lowercase tracking-[0.16em] md:mt-12 md:pt-4">
                   © {new Date().getFullYear()} {site.name}.{site.surname}
                 </footer>
               </SilkArrive>
@@ -274,7 +363,7 @@ export function About() {
                 items={spiralSlides}
                 autoRotate
                 autoSpeed={0.13}
-                className="min-h-[360px] md:min-h-[480px] lg:min-h-[560px]"
+                className="min-h-[220px] h-[34svh] md:h-auto md:min-h-[480px] lg:min-h-[560px]"
                 ariaLabel="Selected photography spiral gallery"
               />
             </div>

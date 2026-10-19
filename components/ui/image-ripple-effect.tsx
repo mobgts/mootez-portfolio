@@ -254,10 +254,11 @@ export function ImageRippleEffect({
       const py = ((clientY - rect.top) / rect.height) * height;
       const x = px - width / 2;
       const y = height / 2 - py;
+      const firstContact = !Number.isFinite(prev.x);
       const moved =
-        Number.isFinite(prev.x) &&
-        (Math.abs(x - prev.x) > waveSpawnThreshold ||
-          Math.abs(y - prev.y) > waveSpawnThreshold);
+        firstContact ||
+        Math.abs(x - prev.x) > waveSpawnThreshold ||
+        Math.abs(y - prev.y) > waveSpawnThreshold;
       prev = { x, y };
       if (!moved) return;
 
@@ -276,7 +277,30 @@ export function ImageRippleEffect({
       clientX = event.clientX;
       clientY = event.clientY;
     };
+    // Touch has no hover — stamp as soon as a finger lands / drags over the photo.
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.pointerType === "mouse") return;
+      clientX = event.clientX;
+      clientY = event.clientY;
+      prev = { x: Number.NaN, y: Number.NaN };
+    };
+    const onPointerUp = (event: PointerEvent) => {
+      if (event.pointerType === "mouse") return;
+      clientX = Number.NaN;
+      clientY = Number.NaN;
+      prev = { x: Number.NaN, y: Number.NaN };
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (!touch) return;
+      clientX = touch.clientX;
+      clientY = touch.clientY;
+    };
     window.addEventListener("pointermove", onPointerMove, { passive: true });
+    window.addEventListener("pointerdown", onPointerDown, { passive: true });
+    window.addEventListener("pointerup", onPointerUp, { passive: true });
+    window.addEventListener("pointercancel", onPointerUp, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
 
     let raf = 0;
     let renderQueued = false;
@@ -323,6 +347,10 @@ export function ImageRippleEffect({
       cancelAnimationFrame(raf);
       observer.disconnect();
       window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+      window.removeEventListener("touchmove", onTouchMove);
       waves.forEach((mesh) => mesh.material.dispose());
       waveGeometry.dispose();
       brushTexture.dispose();
