@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { heroPhoto, photos } from "@/content/photos";
 import { site } from "@/content/site";
 import {
   Spiral3DSlider,
   type Spiral3DSlide,
 } from "@/components/ui/spiral-3d-slider";
+import { bindMobileAxisScrub } from "@/lib/mobileAxisScrub";
 import { useSoftDrift } from "@/lib/softDrift";
 import { AboutPhoto } from "./AboutPhoto";
 import { SilkArrive, useSilkDrive } from "./AboutSilk";
@@ -108,6 +109,15 @@ export function About() {
   const drive = useSilkDrive(sectionRef);
   // Photo + copy soft-wander — same living motion as the nav, kept slight.
   useSoftDrift(sectionRef);
+  // 3D spiral is desktop-only — skip mount on phone (no WebGL cost).
+  const [showSpiral, setShowSpiral] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const sync = () => setShowSpiral(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   useEffect(() => {
     const panel = panelRef.current;
@@ -171,10 +181,10 @@ export function About() {
         seriesSticky.style.visibility !== "hidden" &&
         seriesSticky.getBoundingClientRect().bottom > viewH * 0.35;
 
-      // Series owns the rise pin until chrome is gone.
+      // Series owns the arrive/leave pin — don't paint over it (avoids the
+      // about↔albums overlap when scrolling back up on phone).
       if (document.documentElement.dataset.aboutFromSeries === "1") {
-        if (!(inRunway && !seriesCovering)) return;
-        delete document.documentElement.dataset.aboutFromSeries;
+        return;
       }
 
       // Before About locks — park Contact off-screen to the right (album enter pose).
@@ -269,10 +279,13 @@ export function About() {
     raf = requestAnimationFrame(tick);
     window.addEventListener("resize", onResize);
     window.addEventListener("about-contact-handoff", onNavHandoff);
+    // Same horizontal scrub as albums — left advances, right reverses.
+    const unbindAxisScrub = bindMobileAxisScrub();
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", onResize);
       window.removeEventListener("about-contact-handoff", onNavHandoff);
+      unbindAxisScrub();
       clearBandPin(aboutEl);
       clearBandPin(contactEl);
     };
@@ -297,13 +310,22 @@ export function About() {
           >
             <div
               data-soft-drift="slight"
-              className="relative aspect-[3/2] w-full max-w-[16rem] overflow-hidden md:max-w-none"
+              className="relative w-full max-w-[16rem] md:max-w-none"
             >
-              <AboutPhoto
-                src={heroPhoto.src}
-                maskSrc={heroPhoto.maskSrc}
-                alt={heroPhoto.alt}
-              />
+              {/* Same living sway as the copy — warpScale 0 so the photo doesn't fold. */}
+              <SilkArrive
+                drive={drive}
+                strength={1}
+                warpScale={0}
+                startVisible
+                className="relative aspect-[3/2] w-full overflow-hidden"
+              >
+                <AboutPhoto
+                  src={heroPhoto.src}
+                  maskSrc={heroPhoto.maskSrc}
+                  alt={heroPhoto.alt}
+                />
+              </SilkArrive>
             </div>
 
             <div data-soft-drift="slight" className="relative z-10 w-full max-w-md md:max-w-none">
@@ -313,9 +335,7 @@ export function About() {
                 className="space-y-3 text-[15px] font-medium leading-[1.45] tracking-[0.01em] md:space-y-5 md:text-[18px] md:leading-[1.5]"
               >
                 <p>{site.about.story}</p>
-                <p className="text-[13px] leading-[1.5] tracking-[0.01em] text-muted md:text-[15px] md:leading-[1.55]">
-                  {site.about.body}
-                </p>
+                <p className="text-muted">{site.about.body}</p>
               </SilkArrive>
             </div>
           </div>
@@ -334,13 +354,13 @@ export function About() {
                 strength={1}
                 className="max-w-md space-y-3 text-[20px] font-medium leading-[1.3] tracking-[0.01em] md:max-w-none md:space-y-6 md:text-[28px] md:leading-[1.35]"
               >
-                <p>Interested in working together?</p>
+                <p>Do you have a creative project in mind?</p>
                 <p className="text-[14px] leading-[1.5] tracking-[0.01em] text-muted md:text-[18px] md:leading-[1.55]">
-                  Have a product or creative project and think we&apos;d be a
-                  good fit?
+                  I&apos;m always excited to discuss new ideas and
+                  collaboration opportunities.
                 </p>
                 <p className="pt-1 text-[12px] font-medium tracking-[0.06em] md:pt-2 md:text-[13px]">
-                  Send me an email at{" "}
+                  Feel free to reach out at{" "}
                   <a
                     href={`mailto:${site.email}`}
                     className="underline underline-offset-4 transition-colors hover:text-olive-deep"
@@ -356,15 +376,17 @@ export function About() {
               </SilkArrive>
             </div>
 
-            <div className="min-w-0 w-full md:h-full">
-              <Spiral3DSlider
-                items={spiralSlides}
-                autoRotate
-                autoSpeed={0.13}
-                className="min-h-[220px] h-[34svh] md:h-auto md:min-h-[480px] lg:min-h-[560px]"
-                ariaLabel="Selected photography spiral gallery"
-              />
-            </div>
+            {showSpiral ? (
+              <div className="min-w-0 w-full md:h-full">
+                <Spiral3DSlider
+                  items={spiralSlides}
+                  autoRotate
+                  autoSpeed={0.13}
+                  className="min-h-[480px] lg:min-h-[560px]"
+                  ariaLabel="Selected photography spiral gallery"
+                />
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

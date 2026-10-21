@@ -105,25 +105,10 @@ function readNavOrigin(id: string, preferRail: boolean): OriginBox | null {
   return null;
 }
 
-/** Surfaces that should keep a flying title invisible while covering it. */
-const OCCLUDER_SEL =
-  ".sound-player, .project-browser, .project-browser__file, .about-photo, .image-series__frame, .image-series__titles";
-
-type Box = { left: number; top: number; right: number; bottom: number };
-
-function rectsOverlap(a: Box, b: Box, inset = 2) {
-  return !(
-    a.right < b.left + inset ||
-    a.left > b.right - inset ||
-    a.bottom < b.top + inset ||
-    a.top > b.bottom - inset
-  );
-}
-
 /**
- * Section title that peels off the matching left-rail label on scroll (desktop),
- * or materializes mid-viewport then settles into the section (mobile).
- * Hidden until the beat starts so titles don't ghost over the desktop rail.
+ * Section title that peels off the matching nav label on scroll —
+ * desktop rail or mobile sticky nav — then settles into the section seat.
+ * Hidden until the beat starts so titles don't ghost over the nav.
  */
 export function FromNavMark({
   navId,
@@ -151,9 +136,7 @@ export function FromNavMark({
     const mobile = window.matchMedia("(max-width: 767px)");
     const section = slot.closest("section") ?? slot;
 
-    let occluders: Box[] = [];
     let raf = 0;
-    let flying = false;
     /** Frozen once per peel — never reset mid-flight (that caused the wrong→right hop). */
     let frozenOrigin: OriginBox | null = null;
     let seatSize = { width: 0, height: 0 };
@@ -173,42 +156,14 @@ export function FromNavMark({
       slot.style.height = "";
     };
 
-    const measureOccluders = () => {
-      const scrollY = window.scrollY;
-      occluders = [];
-      for (const card of document.querySelectorAll<HTMLElement>(OCCLUDER_SEL)) {
-        if (slot.contains(card)) continue;
-        const cr = card.getBoundingClientRect();
-        if (cr.width < 12 || cr.height < 12) continue;
-        occluders.push({
-          left: cr.left,
-          right: cr.right,
-          top: cr.top + scrollY,
-          bottom: cr.bottom + scrollY,
-        });
-      }
-    };
-
-    const occluded = (left: number, docTop: number, w: number, h: number) => {
-      const titleBox = {
-        left: left - 6,
-        top: docTop - 4,
-        right: left + Math.max(w, 1) + 6,
-        bottom: docTop + Math.max(h, 1) + 4,
-      };
-      for (const card of occluders) {
-        if (rectsOverlap(titleBox, card)) return true;
-      }
-      return false;
-    };
-
-    /** Begin a desktop peel: capture nav word + in-flow seat size once. */
+    /** Freeze nav word + in-flow seat size once per peel. */
     const beginDesktopPeel = () => {
       clearFlyPin();
       const box = fly.getBoundingClientRect();
       seatSize = { width: box.width, height: box.height };
       holdingSeat = true;
       slot.style.height = `${Math.max(box.height, 1)}px`;
+      // Prefer rail when visible; readNavOrigin skips display:none rail on phone.
       frozenOrigin = readNavOrigin(navId, true);
     };
 
@@ -232,19 +187,17 @@ export function FromNavMark({
         return;
       }
 
-      const scrollY = window.scrollY;
       const vh = window.innerHeight;
       // Live section top — always aims at the real seat, no stale cache.
       const secTop = section.getBoundingClientRect().top;
 
-      const start = mobile.matches ? vh * 0.95 : vh * 1.05;
-      const end = mobile.matches ? vh * 0.18 : vh * 0.28;
+      // Same peel window on phone + desktop; origin comes from rail or sticky nav.
+      const start = mobile.matches ? vh * 1.0 : vh * 1.05;
+      const end = mobile.matches ? vh * 0.22 : vh * 0.28;
       const raw = clamp01((start - secTop) / Math.max(start - end, 1));
       const p = easeInOutCubic(raw);
       const leave = 1 - p;
 
-      if (raw > 0 && !flying) measureOccluders();
-      flying = raw > 0;
       needsTick = raw > 0 && leave > 0.001;
 
       if (raw <= 0) {
@@ -278,45 +231,7 @@ export function FromNavMark({
         return;
       }
 
-      // Mobile: materialize at mid-viewport, then settle into the section seat.
-      if (mobile.matches) {
-        frozenOrigin = null;
-        clearFlyPin();
-        const seat = slot.getBoundingClientRect();
-        const midX = window.innerWidth * 0.5 - seat.width * 0.5;
-        const midY = vh * 0.42 - seat.height * 0.5;
-        const dx = midX - seat.left;
-        const dy = midY - seat.top;
-        const s = 0.92 + 0.08 * p;
-        const visX = seat.left + dx * leave;
-        const visY = seat.top + dy * leave;
-        const behind = occluded(
-          visX,
-          visY + scrollY,
-          seat.width * s,
-          seat.height * s,
-        );
-        const transform = `translate3d(${(dx * leave).toFixed(2)}px, ${(dy * leave).toFixed(2)}px, 0) scale(${s.toFixed(4)})`;
-        const fade = clamp01(raw / 0.32);
-        const shown = behind ? 0 : fade;
-        const key = `m|${transform}|${shown.toFixed(4)}|${behind ? 1 : 0}`;
-        if (written === key) return;
-        written = key;
-        fly.style.visibility = behind ? "hidden" : "visible";
-        fly.style.pointerEvents = "";
-        fly.style.transformOrigin = "left top";
-        fly.style.transform = transform;
-        fly.style.opacity = String(shown);
-        if (extraEl) {
-          const reveal = behind ? 0 : clamp01((p - 0.12) / 0.88);
-          extraEl.style.visibility = reveal > 0 ? "visible" : "hidden";
-          extraEl.style.transform = `translate3d(0, ${((1 - reveal) * 64).toFixed(2)}px, 0)`;
-          extraEl.style.opacity = String(reveal);
-        }
-        return;
-      }
-
-      // Desktop: one origin freeze, live seat from the slot — straight path, no hop.
+      // Peel from the matching nav word (rail on desktop, sticky nav on phone).
       if (!frozenOrigin) beginDesktopPeel();
       const origin = frozenOrigin;
       if (!origin) {
@@ -349,7 +264,8 @@ export function FromNavMark({
       fly.style.position = "fixed";
       fly.style.left = `${x.toFixed(2)}px`;
       fly.style.top = `${y.toFixed(2)}px`;
-      fly.style.zIndex = "50";
+      // Above nav chrome while peeling (rail z-45 / sticky nav z-70).
+      fly.style.zIndex = mobile.matches ? "75" : "50";
       fly.style.visibility = "visible";
       fly.style.pointerEvents = "";
       fly.style.transformOrigin = "left top";
@@ -383,7 +299,6 @@ export function FromNavMark({
         frozenOrigin = null;
       }
       written = "";
-      measureOccluders();
       schedule();
     };
 

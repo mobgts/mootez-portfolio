@@ -107,6 +107,11 @@ body {
     min-height: 405vh;
   }
 
+  .about-handoff__sticky {
+    /* Vertical native scroll; horizontal scrub claimed in JS (same as albums). */
+    touch-action: pan-y;
+  }
+
   .about-handoff__band {
     width: 100%;
     max-height: 100svh;
@@ -213,11 +218,15 @@ html.has-cursor-none * {
 .site-nav {
   --site-nav-pad-x: 1.15rem;
   --site-nav-pad-y: 1.05rem;
+  /* Stay above series expand (60) and about pins so phone taps hit the bar. */
+  z-index: 70;
   color: var(--ink);
   pointer-events: none;
   background: none;
   border: none;
   box-shadow: none;
+  /* Avoid a persistent transform layer after hero-enter (Safari tap bugs). */
+  transform: none;
 }
 
 .site-nav__bar {
@@ -226,13 +235,15 @@ html.has-cursor-none * {
   justify-content: space-between;
   gap: 1rem;
   padding: var(--site-nav-pad-y) var(--site-nav-pad-x) 0.75rem;
+  padding-top: max(var(--site-nav-pad-y), env(safe-area-inset-top, 0px));
   pointer-events: none;
 }
 
 .site-nav__brand {
   display: block;
   flex-shrink: 0;
-  margin-top: 0.05rem;
+  padding: 0.4rem 0.15rem;
+  margin: -0.35rem -0.15rem 0;
   font-family: var(--font-sans-face), "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: clamp(1.15rem, 5vw, 1.4rem);
   font-weight: 500;
@@ -241,10 +252,13 @@ html.has-cursor-none * {
   text-decoration: none;
   color: var(--ink);
   pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .site-nav__brand-drift {
   display: inline-block;
+  pointer-events: none;
 }
 
 .site-nav__brand-soft {
@@ -302,9 +316,12 @@ html.has-cursor-none * {
 
 .site-nav__links a,
 .site-nav__image-btn {
+  position: relative;
   display: inline-flex;
   align-items: baseline;
-  padding: 0;
+  /* Roomier hit target without changing the visual size. */
+  padding: 0.55rem 0.2rem;
+  margin: -0.55rem -0.2rem;
   border: 0;
   background: none;
   color: var(--ink);
@@ -316,7 +333,16 @@ html.has-cursor-none * {
   text-align: right;
   text-decoration: none;
   cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition: color 160ms ease;
+}
+
+.site-nav__link-drift,
+.site-nav__album-drift {
+  display: inline-block;
+  pointer-events: none;
 }
 
 .site-nav__links a:hover,
@@ -378,7 +404,8 @@ html.has-cursor-none * {
 
 .site-nav__albums-row button {
   display: block;
-  padding: 0;
+  padding: 0.45rem 0.2rem;
+  margin: -0.2rem -0.2rem;
   border: 0;
   background: none;
   color: var(--ink);
@@ -388,6 +415,9 @@ html.has-cursor-none * {
   letter-spacing: 0.04em;
   text-align: right;
   cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition: color 160ms ease;
 }
 
@@ -461,28 +491,39 @@ html.has-cursor-none * {
   opacity: 0;
   transform: translate3d(0, 14px, 0);
   transition:
-    opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity 0.95s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.95s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .hero-stage.is-ready .hero-enter,
 .story-page.is-ready .hero-enter,
-/* Rail sits outside .story-page for stacking — still enter with the page. */
-.story-page.is-ready ~ .studio-rail.hero-enter {
+/* Rail + mobile nav sit outside .story-page for stacking — still enter with the page. */
+.story-page.is-ready ~ .studio-rail.hero-enter,
+.story-page.is-ready ~ .site-nav.hero-enter {
   opacity: 1;
-  transform: translate3d(0, 0, 0);
+  /* `none` (not identity translate) — keeps mobile Safari tap targets solid. */
+  transform: none;
+}
+
+/* First open: nav → pic + album name → background (gradient hold in StoryShell). */
+.hero-enter--nav {
+  transition-delay: 0.06s;
+}
+
+.hero-enter--series {
+  transition-delay: 0.48s;
 }
 
 .hero-enter--title {
-  transition-delay: 0.18s;
+  transition-delay: 0.48s;
 }
 
 .hero-enter--copy {
-  transition-delay: 0.34s;
+  transition-delay: 0.58s;
 }
 
 .hero-enter--stack {
-  transition-delay: 0.42s;
+  transition-delay: 0.48s;
 }
 
 /* Natural color stills; --staple-hue kept for optional future grade. */
@@ -491,15 +532,11 @@ html.has-cursor-none * {
 }
 
 .hero-enter--year {
-  transition-delay: 0.28s;
-}
-
-.hero-enter--nav {
   transition-delay: 0.55s;
 }
 
 .hero-enter--meta {
-  transition-delay: 0.72s;
+  transition-delay: 0.7s;
 }
 
 .hero-nav-embed ul {
@@ -590,6 +627,12 @@ html.has-cursor-none * {
   pointer-events: none;
 }
 
+.image-series__stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
 .image-series__titles {
   position: absolute;
   inset: 0;
@@ -676,6 +719,8 @@ html.has-cursor-none * {
   .image-series__sticky {
     /* Sit under the fixed mobile nav without clipping the title. */
     height: 100svh;
+    /* Vertical native scroll; horizontal scrub is claimed in JS once underway. */
+    touch-action: pan-y;
   }
 }
 
@@ -1012,8 +1057,7 @@ html.series-expand-nav-exit .story-about {
   border: 0;
   margin: 0;
   padding: 0;
-  cursor: pointer;
-  pointer-events: auto;
+  pointer-events: none;
   background: color-mix(in srgb, var(--paper) 55%, transparent);
   opacity: 0;
   transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1);

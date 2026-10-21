@@ -338,8 +338,8 @@ function SeriesExpandView({
   }, [navExit, viewerOpen, clearViewerTimers, clearOriginMarks]);
 
   /**
-   * Match ImageSeries album leave: same ease + travel. About/Contact pin
-   * above this layer (z-80) — scatter just slides out underneath.
+   * About: album → right. Contact: album → left (Contact enters from right).
+   * Soft crossfade — photos stay readable until the section is mostly in.
    */
   useEffect(() => {
     if (!navExit || !open) return;
@@ -355,25 +355,24 @@ function SeriesExpandView({
     }
 
     const mobile = window.matchMedia("(max-width: 767px)").matches;
-    // Same axis travel as ImageSeries VISUAL_STEP_GAP * spacing.
     const spacing = mobile
       ? Math.min(window.innerWidth * 0.98, 420)
       : Math.min(window.innerWidth * 0.44, 520);
     const travel = 1.9 * spacing;
+    // Contact: exit left. About: exit right.
+    const dir = navExit === "contact" ? -1 : 1;
     const start = performance.now();
     let raf = 0;
 
     const tick = (now: number) => {
       const raw = clamp01((now - start) / NAV_EXIT_MS);
       const ease = easeInOutCubic(raw);
-      // Hold solid while sliding; fade with landing SERIES_FADE_END (~0.52).
-      const seriesOut = clamp01(ease / 0.52);
-      panel.style.transform = `translate3d(${(ease * travel).toFixed(2)}px, 0, 0)`;
-      panel.style.opacity = (1 - seriesOut).toFixed(3);
-      if (wash) {
-        // Keep wash under the photos; clear only as they leave.
-        wash.style.opacity = (1 - seriesOut * 0.92).toFixed(3);
-      }
+      // Stay solid through most of the slide; fade only at the end.
+      const fadeT = clamp01((ease - 0.55) / 0.45);
+      const fade = easeInOutCubic(fadeT);
+      panel.style.transform = `translate3d(${(dir * ease * travel).toFixed(2)}px, 0, 0)`;
+      panel.style.opacity = (1 - fade).toFixed(3);
+      if (wash) wash.style.opacity = (1 - fade * 0.95).toFixed(3);
       if (raw < 1) raf = requestAnimationFrame(tick);
     };
 
@@ -623,12 +622,8 @@ function SeriesExpandView({
 
       {viewerOpen && activePhoto ? (
         <div className="series-viewer" style={viewerStyle}>
-          <button
-            type="button"
-            className="series-viewer__dim"
-            aria-label="Close photo"
-            onClick={closeViewer}
-          />
+          {/* Dim is visual only — close via the close control, not a screen tap. */}
+          <div className="series-viewer__dim" aria-hidden />
 
           <div className="series-viewer__stage" aria-live="polite">
             <div key={activePhoto.slug} className="series-viewer__frame">

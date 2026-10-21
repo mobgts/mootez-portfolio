@@ -11,6 +11,7 @@ import {
 } from "@/content/seriesExpandUi";
 import { albums } from "@/content/photos";
 import type { Album, Photo } from "@/content/types";
+import { bindMobileAxisScrub } from "@/lib/mobileAxisScrub";
 import { useSoftDrift } from "@/lib/softDrift";
 function openExpand(
   album: Album,
@@ -28,8 +29,10 @@ function openExpand(
 
 /** Lead photos that each get their own scroll slide. */
 const LEAD_COUNT = 3;
-/** Viewport-heights of scroll between photo slots (same pace as before). */
+/** Viewport-heights of scroll between photo slots (desktop). */
 const SCROLL_VH = 0.9;
+/** Phone: shorter runway so finger scroll advances albums faster. */
+const MOBILE_SCROLL_VH = 0.48;
 /**
  * Scroll through the album handoff. Moderate so the 4th reel doesn't feel parked.
  */
@@ -45,6 +48,13 @@ const VISUAL_STEP_GAP = 1.9;
 const REEL_MS = 160;
 /** Short leave when nav jumps past the album runway. */
 const NAV_EXIT_MS = 820;
+function isMobileSeries() {
+  return window.matchMedia("(max-width: 767px)").matches;
+}
+
+function activeScrollVh() {
+  return isMobileSeries() ? MOBILE_SCROLL_VH : SCROLL_VH;
+}
 function clamp01(n: number) {
   return Math.min(1, Math.max(0, n));
 }
@@ -185,23 +195,27 @@ function visualAtIndex(index: number, positions: number[]) {
   return positions[i0] * (1 - t) + positions[i1] * t;
 }
 
-function runwayVh(slots: TrackSlot[]) {
+function runwayVh(slots: TrackSlot[], scrollVh = SCROLL_VH) {
   if (slots.length <= 1) return 1;
   let units = 0;
   for (let i = 0; i < slots.length - 1; i++) {
-    units += SCROLL_VH * slotWeight(slots[i + 1]);
+    units += scrollVh * slotWeight(slots[i + 1]);
   }
   return Math.max(units, 1);
 }
 
-function slotIndexAtProgress(progress: number, slots: TrackSlot[]) {
+function slotIndexAtProgress(
+  progress: number,
+  slots: TrackSlot[],
+  scrollVh = SCROLL_VH,
+) {
   if (slots.length <= 1) return 0;
-  const usable = Math.max(runwayVh(slots), 0.001);
+  const usable = Math.max(runwayVh(slots, scrollVh), 0.001);
   const scrolled = clamp01(progress) * usable;
 
   let walked = 0;
   for (let i = 0; i < slots.length - 1; i++) {
-    const span = SCROLL_VH * slotWeight(slots[i + 1]);
+    const span = scrollVh * slotWeight(slots[i + 1]);
     if (scrolled <= walked + span) {
       const t = (scrolled - walked) / Math.max(span, 0.001);
       return i + t;
@@ -349,7 +363,22 @@ export function ImageSeries() {
   useSoftDrift(panelRef);
 
   const slots = useMemo(() => buildTrack(), []);
-  const runway = useMemo(() => runwayVh(slots), [slots]);
+  const [scrollVh, setScrollVh] = useState(() =>
+    typeof window !== "undefined" &&
+    window.matchMedia("(max-width: 767px)").matches
+      ? MOBILE_SCROLL_VH
+      : SCROLL_VH,
+  );
+  const runway = useMemo(() => runwayVh(slots, scrollVh), [slots, scrollVh]);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const sync = () => setScrollVh(mq.matches ? MOBILE_SCROLL_VH : SCROLL_VH);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
   const shotSlots = useMemo(
     () =>
       slots.filter(
@@ -399,11 +428,12 @@ export function ImageSeries() {
       if (firstIdx < 0) return;
 
       // Progress at the start of this shot (inverse of slotIndexAtProgress).
+      const vh = activeScrollVh();
       let walked = 0;
       for (let i = 0; i < firstIdx; i++) {
-        walked += SCROLL_VH * slotWeight(slots[i + 1]);
+        walked += vh * slotWeight(slots[i + 1]);
       }
-      const usable = Math.max(runwayVh(slots), 0.001);
+      const usable = Math.max(runwayVh(slots, vh), 0.001);
       const progress = clamp01(walked / usable);
 
       const viewH = window.innerHeight;
@@ -527,16 +557,17 @@ export function ImageSeries() {
       const total = Math.max(panel.offsetHeight - viewH, 1);
       const top = panel.getBoundingClientRect().top;
       const progress = clamp01(-top / total);
-      const scrollIndex = slotIndexAtProgress(progress, slots);
+      const vh = activeScrollVh();
+      const scrollIndex = slotIndexAtProgress(progress, slots, vh);
       const scrollPlayhead = visualAtIndex(scrollIndex, visualPositions);
-      const mobile = window.matchMedia("(max-width: 767px)").matches;
-      // Mobile: travel ≈ full width so ~52vw frames clear each other mid-handoff.
+      const mobile = isMobileSeries();
+      // Mobile: a bit tighter than full-width so neighbors sit closer while scrolling.
       const spacing = mobile
-        ? Math.min(window.innerWidth * 0.98, 420)
+        ? Math.min(window.innerWidth * 0.78, 340)
         : Math.min(window.innerWidth * 0.44, 520);
       // Titles travel with the frames, but a bit less so the word stays readable.
       const titleTravel = mobile
-        ? Math.min(window.innerWidth * 0.55, 260)
+        ? Math.min(window.innerWidth * 0.44, 210)
         : Math.min(window.innerWidth * 0.3, 360);
       const arcLift = mobile ? 14 : 26;
       const rotAmt = mobile ? 1.8 : 2.8;
@@ -556,18 +587,18 @@ export function ImageSeries() {
         const raw = clamp01((now - navExit.start) / NAV_EXIT_MS);
         const ease = easeInOutCubic(raw);
         index = navExit.fromIndex;
-        // Hold the current shot axis; push it off to the right as we leave.
-        playhead = navExit.fromPlayhead + ease * VISUAL_STEP_GAP;
+        // About: album exits right. Contact: album exits left.
+        const leaveDir = navExit.target === "contact" ? -1 : 1;
+        playhead = navExit.fromPlayhead + leaveDir * ease * VISUAL_STEP_GAP;
         exitT = ease;
         navJump = true;
         navTarget = navExit.target;
         if (raw >= 1) navExit = null;
       }
 
-      // Album leaves; About rises with the fade, text clears only after series is mostly gone.
-      // Nav jump overlaps sooner so expand→About never flashes empty paper.
-      const aboutRiseStart = navJump ? 0.05 : ABOUT_RISE_START;
-      const aboutOpacityStart = navJump ? 0.18 : ABOUT_OPACITY_START;
+      // Album leaves; section arrives on the opposite side.
+      const aboutRiseStart = navJump ? 0.02 : ABOUT_RISE_START;
+      const aboutOpacityStart = navJump ? 0.12 : ABOUT_OPACITY_START;
       const aboutT = clamp01(
         (exitT - aboutRiseStart) / Math.max(1 - aboutRiseStart, 0.001),
       );
@@ -576,12 +607,20 @@ export function ImageSeries() {
         (exitT - aboutOpacityStart) /
           Math.max(1 - aboutOpacityStart, 0.001),
       );
-      // Snap clear once the opacity window opens — full by ~30% of that window.
+      // Smooth ramp — no snap. Nav jump overlaps album leave for a continuous handoff.
       const aboutOpacity =
         aboutOpacityT <= 0
           ? 0
-          : Math.min(1, easeOutCubic(aboutOpacityT) * (navJump ? 2.8 : 2.4));
-      const seriesOut = clamp01(exitT / SERIES_FADE_END);
+          : Math.min(
+              1,
+              navJump
+                ? easeInOutCubic(aboutOpacityT)
+                : easeOutCubic(aboutOpacityT) * 2.4,
+            );
+      // Nav jump: keep album visible longer while it slides off.
+      const seriesOut = navJump
+        ? clamp01((exitT - 0.45) / 0.55)
+        : clamp01(exitT / SERIES_FADE_END);
 
       // Fade frames/titles only — never the sticky shell (that punched a hole
       // onto About sitting underneath and caused the stacked glitch).
@@ -700,6 +739,12 @@ export function ImageSeries() {
           }
         };
 
+        // Scrolling back into the exit window — reclaim the pin so About and
+        // albums don't both sit opaque on screen (mobile reverse overlap).
+        if (releasedToAbout && exitT > 0 && exitT < 1) {
+          releasedToAbout = false;
+        }
+
         if (exitT <= 0) {
           drivingAbout = false;
           releasedToAbout = false;
@@ -709,23 +754,27 @@ export function ImageSeries() {
         } else if (!releasedToAbout && exitT > 0 && aboutT < 1) {
           drivingAbout = true;
           document.documentElement.dataset.aboutFromSeries = "1";
-          // Nav jump: About from the left, Contact from the right.
+          // Nav jump: About ← left, Contact ← right (album goes the other way).
           // Scroll leave: About still rises from below.
           const yVh = navJump
             ? 0
             : (1 - aboutEase) * (mobile ? 42 : 56);
-          const enterTravel = spacing * (navTargetContact ? 1.15 : 1);
+          const enterTravel = spacing * VISUAL_STEP_GAP * (mobile ? 0.85 : 0.7);
           const xPx = navJump
             ? navTargetContact
               ? (1 - aboutEase) * enterTravel
               : -(1 - aboutEase) * enterTravel
             : 0;
+          // Cap About by seriesOut so reverse scroll can't leave both opaque.
+          const crossOpacity = navJump
+            ? aboutOpacity
+            : Math.min(aboutOpacity, seriesOut);
           pinArriveFixed(
             arriveEl,
             xPx,
             yVh,
-            aboutOpacity,
-            aboutOpacity > 0.35,
+            crossOpacity,
+            crossOpacity > 0.4,
           );
         } else if (!releasedToAbout && aboutT >= 1 && exitT > 0) {
           // Album fade done. Hand off as soon as About's panel is sticky/in view —
@@ -853,7 +902,7 @@ export function ImageSeries() {
       const total = Math.max(panel.offsetHeight - viewH, 1);
       const top = panel.getBoundingClientRect().top;
       const progress = clamp01(-top / total);
-      const index = slotIndexAtProgress(progress, slots);
+      const index = slotIndexAtProgress(progress, slots, activeScrollVh());
       // Already leaving or past the series — scroll jump alone is enough.
       // Still run when expand is open (track is hidden; index may look "past").
       const expandOpen =
@@ -890,15 +939,18 @@ export function ImageSeries() {
     };
 
     const onResize = () => paint();
+
     // Paint once before the first frame so neighbors never flash over doubles.
     paint();
     raf = requestAnimationFrame(tick);
     window.addEventListener("resize", onResize);
     window.addEventListener("series-nav-exit", onNavExit);
+    const unbindAxisScrub = bindMobileAxisScrub();
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", onResize);
       window.removeEventListener("series-nav-exit", onNavExit);
+      unbindAxisScrub();
       delete document.documentElement.dataset.aboutFromSeries;
       if (stickyEl) {
         stickyEl.style.opacity = "";
@@ -930,40 +982,42 @@ export function ImageSeries() {
         data-series="all"
       >
         <div className="image-series__sticky">
-          <div className="image-series__titles" aria-hidden>
-            <h2
-              ref={titleLeaveRef}
-              className="image-series__title"
-              data-series-title={initialTitle}
-            >
-              <span data-soft-drift="slight">{initialTitle}</span>
-            </h2>
-            <h2
-              ref={titleEnterRef}
-              className="image-series__title image-series__title--enter"
-              data-series-title={initialTitle}
-            >
-              <span data-soft-drift="slight">{initialTitle}</span>
-            </h2>
-          </div>
+          <div className="image-series__stage hero-enter hero-enter--series">
+            <div className="image-series__titles" aria-hidden>
+              <h2
+                ref={titleLeaveRef}
+                className="image-series__title"
+                data-series-title={initialTitle}
+              >
+                <span data-soft-drift="slight">{initialTitle}</span>
+              </h2>
+              <h2
+                ref={titleEnterRef}
+                className="image-series__title image-series__title--enter"
+                data-series-title={initialTitle}
+              >
+                <span data-soft-drift="slight">{initialTitle}</span>
+              </h2>
+            </div>
 
-          <div ref={trackRef} className="image-series__track">
-            {shotSlots.map((slot, shotIdx) => {
-              const slotIdx = slots.findIndex((entry) => entry.key === slot.key);
-              const flipping = slot.reel && slotIdx === activeReelSlot;
-              return (
-                <SeriesFrame
-                  key={slot.key}
-                  album={slot.album}
-                  photo={slot.photo}
-                  getTitleEl={getTitleEl}
-                  reel={slot.reel}
-                  reelPhotos={slot.reelPhotos}
-                  reelIndex={flipping ? reelIndex : 0}
-                  priority={shotIdx === 0}
-                />
-              );
-            })}
+            <div ref={trackRef} className="image-series__track">
+              {shotSlots.map((slot, shotIdx) => {
+                const slotIdx = slots.findIndex((entry) => entry.key === slot.key);
+                const flipping = slot.reel && slotIdx === activeReelSlot;
+                return (
+                  <SeriesFrame
+                    key={slot.key}
+                    album={slot.album}
+                    photo={slot.photo}
+                    getTitleEl={getTitleEl}
+                    reel={slot.reel}
+                    reelPhotos={slot.reelPhotos}
+                    reelIndex={flipping ? reelIndex : 0}
+                    priority={shotIdx === 0}
+                  />
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

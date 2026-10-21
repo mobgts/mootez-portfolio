@@ -3,13 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { albums } from "@/content/photos";
 import { site } from "@/content/site";
-import { onNavSectionClick, openAlbumFromNav } from "@/lib/navScroll";
-
-function scrollToImage() {
-  const target =
-    document.getElementById("image") ?? document.getElementById("top");
-  target?.scrollIntoView({ behavior: "smooth", block: "start" });
-}
+import {
+  onBrandClick,
+  onNavSectionClick,
+  openAlbumFromNav,
+} from "@/lib/navScroll";
 
 type DriftSpec = {
   el: HTMLElement;
@@ -87,17 +85,23 @@ export function StudioRail() {
   }, []);
 
   const toggleImage = () => {
-    setImageOpen((open) => {
-      const next = !open;
-      if (next) scrollToImage();
-      return next;
-    });
+    setImageOpen((open) => !open);
+  };
+
+  const pickAlbum = (albumId: string) => {
+    setImageOpen(false);
+    openAlbumFromNav(albumId);
   };
 
   return (
     <aside ref={railRef} className="studio-rail hero-enter hero-enter--nav">
       <div className="studio-rail__top">
-        <a href="#top" className="studio-rail__name" data-rail-drift>
+        <a
+          href="/"
+          className="studio-rail__name"
+          data-rail-drift
+          onClick={onBrandClick}
+        >
           <span>{site.name}</span>
           <span className="studio-rail__name-soft">
             {"."}
@@ -147,7 +151,7 @@ export function StudioRail() {
                                 <button
                                   type="button"
                                   tabIndex={imageOpen ? 0 : -1}
-                                  onClick={() => openAlbumFromNav(album.id)}
+                                  onClick={() => pickAlbum(album.id)}
                                   style={{ ["--i" as string]: albumIndex }}
                                 >
                                   {album.label.replace(/^series:\s*/i, "")}

@@ -1,15 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { albums } from "@/content/photos";
 import { site } from "@/content/site";
-import { onNavSectionClick, openAlbumFromNav } from "@/lib/navScroll";
-
-function scrollToImage() {
-  const target =
-    document.getElementById("image") ?? document.getElementById("top");
-  target?.scrollIntoView({ behavior: "smooth", block: "start" });
-}
+import {
+  onBrandClick,
+  onNavSectionClick,
+  openAlbumFromNav,
+} from "@/lib/navScroll";
 
 type DriftSpec = {
   el: HTMLElement;
@@ -30,7 +28,8 @@ export function StickyNav() {
   const [imageOpen, setImageOpen] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
 
-  // Soft wander on labels — same living motion as desktop.
+  // Soft wander on labels only — never on the hit target (iOS cancels taps
+  // when the tapped element itself keeps transforming between touchstart/end).
   useEffect(() => {
     const bar = barRef.current;
     if (!bar) return;
@@ -87,17 +86,28 @@ export function StickyNav() {
   }, []);
 
   const toggleImage = () => {
-    setImageOpen((open) => {
-      const next = !open;
-      if (next) scrollToImage();
-      return next;
-    });
+    setImageOpen((open) => !open);
+  };
+
+  const pickAlbum = (albumId: string) => {
+    setImageOpen(false);
+    openAlbumFromNav(albumId);
+  };
+
+  const goHome = (event: MouseEvent) => {
+    setImageOpen(false);
+    onBrandClick(event);
+  };
+
+  const goSection = (event: MouseEvent, id: string) => {
+    setImageOpen(false);
+    onNavSectionClick(event, id);
   };
 
   return (
-    <header className="site-nav fixed inset-x-0 top-0 z-40 md:hidden">
+    <header className="site-nav hero-enter hero-enter--nav fixed inset-x-0 top-0 z-[70] md:hidden">
       <div ref={barRef} className="site-nav__bar">
-        <a href="#top" className="site-nav__brand">
+        <a href="/" className="site-nav__brand" onClick={goHome}>
           <span data-rail-drift className="site-nav__brand-drift">
             <span>{site.name}</span>
             <span className="site-nav__brand-soft">
@@ -115,21 +125,27 @@ export function StickyNav() {
 
               if (item.id === "image") {
                 return (
-                  <li key={item.id} className="site-nav__item site-nav__item--image">
+                  <li
+                    key={item.id}
+                    className="site-nav__item site-nav__item--image"
+                  >
                     <button
                       type="button"
                       aria-expanded={imageOpen}
                       aria-label={item.label}
                       onClick={toggleImage}
                       data-nav-origin={item.id}
-                      data-rail-drift
                       className="site-nav__image-btn"
                     >
-                      {label}
+                      <span data-rail-drift className="site-nav__link-drift">
+                        {label}
+                      </span>
                     </button>
                     <div
                       className={
-                        imageOpen ? "site-nav__albums is-open" : "site-nav__albums"
+                        imageOpen
+                          ? "site-nav__albums is-open"
+                          : "site-nav__albums"
                       }
                       aria-hidden={!imageOpen}
                     >
@@ -137,19 +153,19 @@ export function StickyNav() {
                         <ul className="site-nav__albums-row">
                           {albums.map((album, albumIndex) => (
                             <li key={album.id}>
-                              <span
-                                className="site-nav__album-drift"
-                                data-rail-drift
+                              <button
+                                type="button"
+                                tabIndex={imageOpen ? 0 : -1}
+                                onClick={() => pickAlbum(album.id)}
+                                style={{ ["--i" as string]: albumIndex }}
                               >
-                                <button
-                                  type="button"
-                                  tabIndex={imageOpen ? 0 : -1}
-                                  onClick={() => openAlbumFromNav(album.id)}
-                                  style={{ ["--i" as string]: albumIndex }}
+                                <span
+                                  className="site-nav__album-drift"
+                                  data-rail-drift
                                 >
                                   {album.label.replace(/^series:\s*/i, "")}
-                                </button>
-                              </span>
+                                </span>
+                              </button>
                             </li>
                           ))}
                         </ul>
@@ -164,11 +180,12 @@ export function StickyNav() {
                   <a
                     href={`#${item.id}`}
                     data-nav-origin={item.id}
-                    data-rail-drift
                     aria-label={item.label}
-                    onClick={(event) => onNavSectionClick(event, item.id)}
+                    onClick={(event) => goSection(event, item.id)}
                   >
-                    {label}
+                    <span data-rail-drift className="site-nav__link-drift">
+                      {label}
+                    </span>
                   </a>
                 </li>
               );

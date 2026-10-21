@@ -1,3 +1,5 @@
+import { setPageHash } from "@/lib/pageHash";
+
 type Listener = () => void;
 
 export type TitleSnapshot = {
@@ -80,10 +82,11 @@ export function openSeriesExpand(
   fromRect?: FrameSnapshot,
 ) {
   state = { albumId, fromSlug, titleSnap, fromRect, navExit: null };
+  setPageHash(albumId);
   notify();
 }
 
-/** Scatter flies right while the page lands on About/Contact. */
+/** Leave scatter: About ← album right; Contact ← album left. */
 export function exitSeriesExpandTo(target: SeriesExpandNavExit) {
   if (!state.albumId) return false;
   if (state.navExit === target) return true;
@@ -94,7 +97,15 @@ export function exitSeriesExpandTo(target: SeriesExpandNavExit) {
 
 export function closeSeriesExpand() {
   if (!state.albumId) return;
+  const closedId = state.albumId;
   state = { albumId: null, navExit: null };
+  // Don't wipe #about / #contact if nav already moved the hash.
+  if (
+    typeof window !== "undefined" &&
+    window.location.hash === `#${closedId}`
+  ) {
+    setPageHash(null);
+  }
   notify();
 }
 

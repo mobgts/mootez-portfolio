@@ -4,6 +4,7 @@ import {
   closeSeriesExpand,
   openSeriesExpand,
 } from "@/content/seriesExpandUi";
+import { setPageHash } from "@/lib/pageHash";
 
 /** Sections that sit past the long album runway. */
 export type JumpSection = "about" | "contact";
@@ -205,7 +206,7 @@ export function jumpToSection(id: JumpSection) {
 
   const from = currentNavZone();
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  history.replaceState(null, "", `#${id}`);
+  setPageHash(id);
 
   // Open album: leave the scatter the same way the landing album leaves.
   if (isSeriesExpandOpen()) {
@@ -270,6 +271,15 @@ export function onNavSectionClick(
   return true;
 }
 
+/** Brand mark — scroll home without leaving a #top / #image hash. */
+export function onBrandClick(event: { preventDefault(): void }) {
+  event.preventDefault();
+  setPageHash(null);
+  if (isSeriesExpandOpen()) closeSeriesExpand();
+  clearAboutChrome();
+  snapScroll(0);
+}
+
 /** Drop About/Contact pin styles left over from a series leave. */
 function clearAboutChrome() {
   delete document.documentElement.dataset.aboutFromSeries;
@@ -305,7 +315,6 @@ function clearAboutChrome() {
  */
 export function openAlbumFromNav(albumId: string) {
   openSeriesExpand(albumId);
-  history.replaceState(null, "", "#image");
 
   const prepareUnderCover = () => {
     clearAboutChrome();
