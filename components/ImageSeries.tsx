@@ -282,6 +282,7 @@ function SeriesFrame({
   reel = false,
   reelPhotos,
   reelIndex = 0,
+  priority = false,
 }: {
   album: Album;
   photo: Photo;
@@ -289,6 +290,8 @@ function SeriesFrame({
   reel?: boolean;
   reelPhotos?: Photo[];
   reelIndex?: number;
+  /** Prefer the landing doubles lead — never warm off-screen reels. */
+  priority?: boolean;
 }) {
   const frames = reel && reelPhotos && reelPhotos.length > 0 ? reelPhotos : [photo];
   const active = frames[reelIndex % frames.length] ?? photo;
@@ -325,8 +328,7 @@ function SeriesFrame({
                 quality={90}
                 sizes="(min-width: 768px) 32vw, 90vw"
                 className="object-cover"
-                // Warm stacked reel frames so cuts never flash empty.
-                priority={reel}
+                priority={priority && i === 0}
               />
             </span>
           );
@@ -381,6 +383,53 @@ export function ImageSeries() {
     sync();
     return subscribeSeriesExpand(sync);
   }, []);
+
+  /** Nav album pick from About/Contact — park the runway on that series first. */
+  useEffect(() => {
+    const onFocusAlbum = (event: Event) => {
+      const albumId = (event as CustomEvent<{ albumId?: string }>).detail
+        ?.albumId;
+      if (!albumId) return;
+      const panel = panelRef.current;
+      if (!panel) return;
+
+      const firstIdx = slots.findIndex(
+        (slot) => slot.kind === "shot" && slot.album.id === albumId,
+      );
+      if (firstIdx < 0) return;
+
+      // Progress at the start of this shot (inverse of slotIndexAtProgress).
+      let walked = 0;
+      for (let i = 0; i < firstIdx; i++) {
+        walked += SCROLL_VH * slotWeight(slots[i + 1]);
+      }
+      const usable = Math.max(runwayVh(slots), 0.001);
+      const progress = clamp01(walked / usable);
+
+      const viewH = window.innerHeight;
+      const total = Math.max(panel.offsetHeight - viewH, 1);
+      const panelDocTop = panel.getBoundingClientRect().top + window.scrollY;
+      const top = panelDocTop + progress * total;
+
+      const html = document.documentElement;
+      html.style.scrollBehavior = "auto";
+      window.scrollTo({ top, behavior: "auto" });
+      requestAnimationFrame(() => {
+        html.style.scrollBehavior = "";
+      });
+
+      // Undo a prior nav-exit hide so the series can paint under the expand.
+      const sticky = panel.querySelector<HTMLElement>(".image-series__sticky");
+      if (sticky) {
+        sticky.style.opacity = "";
+        sticky.style.visibility = "";
+        sticky.style.pointerEvents = "";
+      }
+    };
+
+    window.addEventListener("series-focus-album", onFocusAlbum);
+    return () => window.removeEventListener("series-focus-album", onFocusAlbum);
+  }, [slots]);
 
   const getTitleEl = (albumId: string) => {
     const leave = titleLeaveRef.current;
@@ -499,7 +548,7 @@ export function ImageSeries() {
         lastShot >= 0 && exitSlotIdx > lastShot
           ? clamp01((index - lastShot) / exitSpan)
           : 0;
-      /** Nav jump: skip album scrub; About rises from below, Contact slides from right. */
+      /** Nav jump: skip album scrub; About from left, Contact from right. */
       let navJump = false;
       let navTarget: "about" | "contact" | null = null;
 
@@ -516,17 +565,22 @@ export function ImageSeries() {
       }
 
       // Album leaves; About rises with the fade, text clears only after series is mostly gone.
+      // Nav jump overlaps sooner so expand→About never flashes empty paper.
+      const aboutRiseStart = navJump ? 0.05 : ABOUT_RISE_START;
+      const aboutOpacityStart = navJump ? 0.18 : ABOUT_OPACITY_START;
       const aboutT = clamp01(
-        (exitT - ABOUT_RISE_START) / Math.max(1 - ABOUT_RISE_START, 0.001),
+        (exitT - aboutRiseStart) / Math.max(1 - aboutRiseStart, 0.001),
       );
       const aboutEase = easeInOutCubic(aboutT);
       const aboutOpacityT = clamp01(
-        (exitT - ABOUT_OPACITY_START) /
-          Math.max(1 - ABOUT_OPACITY_START, 0.001),
+        (exitT - aboutOpacityStart) /
+          Math.max(1 - aboutOpacityStart, 0.001),
       );
       // Snap clear once the opacity window opens — full by ~30% of that window.
       const aboutOpacity =
-        aboutOpacityT <= 0 ? 0 : Math.min(1, easeOutCubic(aboutOpacityT) * 2.4);
+        aboutOpacityT <= 0
+          ? 0
+          : Math.min(1, easeOutCubic(aboutOpacityT) * (navJump ? 2.8 : 2.4));
       const seriesOut = clamp01(exitT / SERIES_FADE_END);
 
       // Fade frames/titles only — never the sticky shell (that punched a hole
@@ -575,7 +629,12 @@ export function ImageSeries() {
           el.style.width = mobile ? "100%" : "min(100%, 64rem)";
           el.style.maxWidth = mobile ? "100%" : "64rem";
           // Under series chrome until album is gone, then above for the arrive.
-          el.style.zIndex = seriesOut >= 1 ? "30" : "5";
+          // Nav jump from expand: above scatter (60), under site nav (70).
+          el.style.zIndex = navJump
+            ? "65"
+            : seriesOut >= 1
+              ? "30"
+              : "5";
           el.style.willChange = "transform, opacity";
           el.style.transform = `translate3d(calc(-50% + ${xPx.toFixed(2)}px), calc(-50% + ${yVh.toFixed(2)}vh), 0)`;
           el.style.opacity = opacity.toFixed(3);
@@ -585,6 +644,7 @@ export function ImageSeries() {
             parkEl.style.opacity = "0";
             parkEl.style.visibility = "hidden";
             parkEl.style.pointerEvents = "none";
+            parkEl.style.zIndex = "1";
           }
         };
 
@@ -649,9 +709,17 @@ export function ImageSeries() {
         } else if (!releasedToAbout && exitT > 0 && aboutT < 1) {
           drivingAbout = true;
           document.documentElement.dataset.aboutFromSeries = "1";
-          // About: rise from below. Contact nav jump: slide in from the right.
-          const yVh = navTargetContact ? 0 : (1 - aboutEase) * (mobile ? 42 : 56);
-          const xPx = navTargetContact ? (1 - aboutEase) * spacing : 0;
+          // Nav jump: About from the left, Contact from the right.
+          // Scroll leave: About still rises from below.
+          const yVh = navJump
+            ? 0
+            : (1 - aboutEase) * (mobile ? 42 : 56);
+          const enterTravel = spacing * (navTargetContact ? 1.15 : 1);
+          const xPx = navJump
+            ? navTargetContact
+              ? (1 - aboutEase) * enterTravel
+              : -(1 - aboutEase) * enterTravel
+            : 0;
           pinArriveFixed(
             arriveEl,
             xPx,
@@ -787,13 +855,33 @@ export function ImageSeries() {
       const progress = clamp01(-top / total);
       const index = slotIndexAtProgress(progress, slots);
       // Already leaving or past the series — scroll jump alone is enough.
-      if (lastShot >= 0 && index >= lastShot) return;
+      // Still run when expand is open (track is hidden; index may look "past").
+      const expandOpen =
+        document.documentElement.classList.contains("series-expand-open") ||
+        document.documentElement.classList.contains("series-expand-nav-exit");
+      if (!expandOpen && lastShot >= 0 && index >= lastShot) return;
+
+      // Prime both bands hidden — section may unhide before the first pin paint.
+      const aboutArrive = document.querySelector<HTMLElement>(
+        "[data-about-arrive]",
+      );
+      const contactBlock = document.querySelector<HTMLElement>(
+        "[data-contact-block]",
+      );
+      for (const el of [aboutArrive, contactBlock]) {
+        if (!el) continue;
+        el.style.opacity = "0";
+        el.style.visibility = "hidden";
+        el.style.pointerEvents = "none";
+      }
+
       navExit = {
         start: performance.now(),
         fromIndex: index,
         fromPlayhead: visualAtIndex(index, visualPositions),
         target,
       };
+      releasedToAbout = false;
     };
 
     const tick = (now: number) => {
@@ -802,6 +890,8 @@ export function ImageSeries() {
     };
 
     const onResize = () => paint();
+    // Paint once before the first frame so neighbors never flash over doubles.
+    paint();
     raf = requestAnimationFrame(tick);
     window.addEventListener("resize", onResize);
     window.addEventListener("series-nav-exit", onNavExit);
@@ -858,7 +948,7 @@ export function ImageSeries() {
           </div>
 
           <div ref={trackRef} className="image-series__track">
-            {shotSlots.map((slot) => {
+            {shotSlots.map((slot, shotIdx) => {
               const slotIdx = slots.findIndex((entry) => entry.key === slot.key);
               const flipping = slot.reel && slotIdx === activeReelSlot;
               return (
@@ -870,6 +960,7 @@ export function ImageSeries() {
                   reel={slot.reel}
                   reelPhotos={slot.reelPhotos}
                   reelIndex={flipping ? reelIndex : 0}
+                  priority={shotIdx === 0}
                 />
               );
             })}

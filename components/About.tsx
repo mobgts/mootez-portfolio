@@ -11,12 +11,10 @@ import { useSoftDrift } from "@/lib/softDrift";
 import { AboutPhoto } from "./AboutPhoto";
 import { SilkArrive, useSilkDrive } from "./AboutSilk";
 
-const spiralSlides: Spiral3DSlide[] = photos
-  .filter((photo) => !photo.src.endsWith(".svg"))
-  .map((photo) => ({
-    src: photo.src,
-    alt: photo.alt,
-  }));
+const spiralSlides: Spiral3DSlide[] = photos.map((photo) => ({
+  src: photo.src,
+  alt: photo.alt,
+}));
 
 /**
  * About ↔ Contact uses the same axis math as album ↔ album in ImageSeries:

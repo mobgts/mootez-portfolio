@@ -16,11 +16,15 @@ export type FrameSnapshot = {
   height: number;
 };
 
+export type SeriesExpandNavExit = "about" | "contact";
+
 export type SeriesExpandState = {
   albumId: string | null;
   fromSlug?: string;
   titleSnap?: TitleSnapshot;
   fromRect?: FrameSnapshot;
+  /** Leave the scatter toward About/Contact (nav), instead of a plain close. */
+  navExit?: SeriesExpandNavExit | null;
 };
 
 let state: SeriesExpandState = { albumId: null };
@@ -32,6 +36,10 @@ function notify() {
 
 export function getSeriesExpand(): SeriesExpandState {
   return state;
+}
+
+export function isSeriesExpandOpen() {
+  return Boolean(state.albumId);
 }
 
 export function captureTitleSnapshot(
@@ -71,13 +79,22 @@ export function openSeriesExpand(
   titleSnap?: TitleSnapshot,
   fromRect?: FrameSnapshot,
 ) {
-  state = { albumId, fromSlug, titleSnap, fromRect };
+  state = { albumId, fromSlug, titleSnap, fromRect, navExit: null };
   notify();
+}
+
+/** Scatter flies right while the page lands on About/Contact. */
+export function exitSeriesExpandTo(target: SeriesExpandNavExit) {
+  if (!state.albumId) return false;
+  if (state.navExit === target) return true;
+  state = { ...state, navExit: target };
+  notify();
+  return true;
 }
 
 export function closeSeriesExpand() {
   if (!state.albumId) return;
-  state = { albumId: null };
+  state = { albumId: null, navExit: null };
   notify();
 }
 

@@ -168,9 +168,9 @@ html.has-cursor-none * {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--olive-deep);
+  background: transparent;
+  border: 1.5px solid var(--olive-deep);
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--cream) 88%, transparent),
     0 0 calc(6px + var(--cursor-heat) * 22px) calc(var(--cursor-heat) * 3px)
       rgb(var(--cursor-glow) / calc(0.14 + var(--cursor-heat) * 0.42));
   transition:
@@ -180,6 +180,8 @@ html.has-cursor-none * {
 }
 
 .studio-cursor.is-caret {
+  background: var(--olive-deep);
+  border: none;
   box-shadow: none;
 }
 
@@ -464,7 +466,9 @@ html.has-cursor-none * {
 }
 
 .hero-stage.is-ready .hero-enter,
-.story-page.is-ready .hero-enter {
+.story-page.is-ready .hero-enter,
+/* Rail sits outside .story-page for stacking — still enter with the page. */
+.story-page.is-ready ~ .studio-rail.hero-enter {
   opacity: 1;
   transform: translate3d(0, 0, 0);
 }
@@ -644,10 +648,17 @@ html.has-cursor-none * {
   border: 0;
   background: color-mix(in srgb, var(--ink) 8%, transparent);
   cursor: pointer;
+  /* Hidden until scroll paint runs — otherwise every frame stacks on load. */
+  opacity: 0;
   transform: translate3d(-50%, -50%, 0);
   transform-origin: center center;
   will-change: transform, opacity;
   pointer-events: none;
+}
+
+/* First doubles lead only, until ImageSeries takes over transforms. */
+.image-series__frame:first-child {
+  opacity: 1;
 }
 
 /* Phone: smaller frames + roomy travel so neighbors don't stack on top of each other. */
@@ -692,7 +703,7 @@ html.has-cursor-none * {
   outline-offset: 6px;
 }
 
-/* ---- Series expand: title stays, compact 2xn grid drops under it ---- */
+/* ---- Series expand: title stays; album opens as editorial scatter ---- */
 .series-expand {
   --from-x: 50%;
   --from-y: 42%;
@@ -716,6 +727,53 @@ html.has-cursor-none * {
     visibility 0s linear 0s;
 }
 
+/* Nav → About/Contact: scatter slides under; About/Contact pin above (z-80). */
+.series-expand.is-nav-exit {
+  pointer-events: none;
+  z-index: 60;
+}
+
+.series-expand.is-nav-exit .series-expand__wash {
+  transition: none;
+}
+
+.series-expand.is-nav-exit .series-expand__scroller {
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.series-expand.is-nav-exit .series-expand__panel {
+  animation: none;
+  will-change: transform, opacity;
+}
+
+.series-expand.is-nav-exit .series-expand__close {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+/*
+ * Free About/Contact fixed pins from page stacking so they can sit above the
+ * expand (z-80 > 60). Do NOT lift the whole page — that flashed cream.
+ */
+html.series-expand-nav-exit .story-page {
+  isolation: auto;
+}
+
+html.series-expand-nav-exit .story-page__content {
+  z-index: auto;
+  pointer-events: auto;
+}
+
+html.series-expand-nav-exit .story-about {
+  z-index: auto;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: none;
+  transition: none;
+}
+
 .series-expand__wash {
   position: absolute;
   inset: 0;
@@ -723,9 +781,15 @@ html.has-cursor-none * {
   border: 0;
   padding: 0;
   margin: 0;
-  cursor: pointer;
-  /* Transparent — landing gradient / warp / title stay fully visible behind. */
-  background: transparent;
+  pointer-events: none;
+  /* Soft fade so landing chrome doesn't compete with the album. */
+  background: color-mix(in srgb, var(--paper) 72%, transparent);
+  opacity: 0;
+  transition: opacity 380ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.series-expand.is-open .series-expand__wash {
+  opacity: 1;
 }
 
 .series-expand__scroller {
@@ -735,68 +799,162 @@ html.has-cursor-none * {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  pointer-events: none;
+  pointer-events: auto;
   scrollbar-width: thin;
   scrollbar-color: #8e8e8e transparent;
 }
 
 .series-expand__panel {
+  --scatter-gap: clamp(4.5rem, 12vw, 9rem);
+  /* Clears the fixed nav so the first shot isn’t jammed under it. */
+  --scatter-top: clamp(5.25rem, 11vh, 7rem);
+  position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
+  /* Same gap between album copies as between shots — seamless last ↔ first. */
+  gap: var(--scatter-gap);
   width: 100%;
-  min-height: 100%;
-  padding: clamp(1.25rem, 3vh, 2rem) 1.25rem 3.5rem;
+  padding: 0 1.39vw;
   pointer-events: none;
   transform-origin: var(--from-x) var(--from-y);
 }
 
-.series-expand.is-open .series-expand__panel {
-  animation: series-grid-open 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
+.series-expand.is-open:not(.is-nav-exit) .series-expand__panel {
+  animation: series-scatter-open 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.series-expand__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(1.35rem, 2.8vw, 2.15rem);
-  width: min(520px, calc(100% - 0.5rem));
+/* Equal top inset in every copy so the loop seam stays even. */
+.series-expand__loop {
+  box-sizing: border-box;
+  width: 100%;
+  padding-top: var(--scatter-top);
+}
+
+/* Full-bleed scatter — mixed sizes + left/right placements, not a grid. */
+.series-expand__scatter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--scatter-gap);
+  width: 100%;
+  max-width: 97.22vw;
   margin: 0 auto;
   pointer-events: auto;
 }
 
-.series-expand__shot {
+.series-expand__row {
+  display: block;
+  width: 100%;
   margin: 0;
-  opacity: 0;
 }
 
-.series-expand.is-open .series-expand__shot {
-  animation: series-shot-down 680ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: calc(90ms + var(--i, 0) * 48ms);
+.series-expand__row--pair {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: clamp(1rem, 3vw, 2.5rem);
+}
+
+/* Beat 1 — medium, left */
+.series-expand__row[data-pos="1"] .series-expand__shot {
+  width: min(18.31vw, 280px);
+  margin-left: 1.39vw;
+}
+
+/* Beat 2 — medium, far right */
+.series-expand__row[data-pos="2"] .series-expand__shot {
+  width: min(18.31vw, 280px);
+  margin-left: auto;
+  margin-right: clamp(1rem, 8vw, 7rem);
+}
+
+/* Beat 3 — smaller, left-of-center */
+.series-expand__row[data-pos="3"] .series-expand__shot {
+  width: min(11.74vw, 190px);
+  margin-left: clamp(2rem, 14.5vw, 12rem);
+}
+
+/* Beat 4 — large single, right-ish */
+.series-expand__row[data-pos="4"]:not(.series-expand__row--pair) .series-expand__shot {
+  width: min(24.88vw, 380px);
+  margin-left: auto;
+  margin-right: clamp(1.5rem, 8vw, 6rem);
+}
+
+/* Beat 4 pair — wide left + small right */
+.series-expand__row--pair[data-pos="4"] .series-expand__shot:first-child {
+  width: min(31.44vw, 480px);
+  margin: 0;
+}
+
+.series-expand__row--pair[data-pos="4"] .series-expand__shot:last-child {
+  width: min(11.74vw, 190px);
+  margin: 0;
+}
+
+/* Beat 5 — large, mid-left */
+.series-expand__row[data-pos="5"]:not(.series-expand__row--pair) .series-expand__shot {
+  width: min(31.44vw, 480px);
+  margin-left: clamp(4rem, 27vw, 22rem);
+}
+
+/* Beat 5 pair — wide left + small right */
+.series-expand__row--pair[data-pos="5"] .series-expand__shot:first-child {
+  width: min(31.44vw, 480px);
+  margin-left: 1.39vw;
+}
+
+.series-expand__row--pair[data-pos="5"] .series-expand__shot:last-child {
+  width: min(11.74vw, 190px);
+  margin-right: 1.39vw;
+}
+
+.series-expand__shot {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  /* Buffer copies stay visible so scroll-up already shows the last frames. */
+  opacity: 1;
+  transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.series-expand.is-open [data-series-loop="1"] .series-expand__shot {
+  opacity: 0;
+  animation: series-shot-down 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(70ms + var(--i, 0) * 55ms);
+}
+
+/* After first entrance (or once a photo was opened), stay put — no reload. */
+.series-expand.is-scatter-ready:not(.is-viewing) [data-series-loop="1"] .series-expand__shot {
+  animation: none !important;
+  opacity: 1;
+}
+
+.series-expand.is-viewing [data-series-loop="1"] .series-expand__shot {
+  animation: none !important;
 }
 
 .series-expand__frame {
   width: 100%;
   border-radius: 2px;
+  pointer-events: none;
 }
 
-.series-expand__footer {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1.5rem;
-  width: min(520px, calc(100% - 0.5rem));
-  margin: 1.5rem auto 0;
-  padding-top: 0.9rem;
-  border-top: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
-  pointer-events: auto;
-}
-
-.series-expand__nav {
+.series-expand__close {
+  position: fixed;
+  z-index: 2;
+  left: clamp(1rem, 1.39vw, 1.5rem);
+  bottom: clamp(1.1rem, 2.22vh, 1.75rem);
   border: 0;
   padding: 0.35rem 0;
   background: none;
   color: var(--ink);
   cursor: pointer;
+  pointer-events: auto;
   font-family: var(--font-sans-face), "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: clamp(0.95rem, 1.8vw, 1.15rem);
   font-weight: 500;
@@ -806,20 +964,201 @@ html.has-cursor-none * {
   transition: opacity 220ms ease;
 }
 
-.series-expand__nav:hover {
+.series-expand__close:hover {
   opacity: 0.62;
 }
 
-.series-expand__nav--next {
-  font-size: clamp(1.15rem, 2.4vw, 1.65rem);
-  letter-spacing: -0.03em;
-  color: var(--olive);
+/* Focused photo: others stay put but go very transparent behind it. */
+.series-expand.is-viewing .series-expand__scroller {
+  pointer-events: none;
+  overflow: hidden;
 }
 
-@keyframes series-grid-open {
+.series-expand.is-viewing .series-expand__shot {
+  animation: none !important;
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+.series-expand.is-viewing .series-expand__shot[data-viewer-origin] {
+  /* Hand off to the lightbox growing from this frame. */
+  opacity: 0;
+}
+
+.series-expand.is-viewing.is-viewer-in .series-expand__shot {
+  opacity: 0.08;
+}
+
+.series-expand.is-viewing.is-viewer-in .series-expand__shot[data-viewer-origin] {
+  opacity: 0;
+}
+
+/* ---- Single-image viewer (click a scatter frame) ---- */
+.series-viewer {
+  --from-left: 50%;
+  --from-top: 50%;
+  --from-w: 40vw;
+  --from-h: 60vh;
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.series-viewer__dim {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  background: color-mix(in srgb, var(--paper) 55%, transparent);
+  opacity: 0;
+  transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.series-expand.is-viewer-in .series-viewer__dim {
+  opacity: 1;
+}
+
+.series-viewer__stage {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 50%;
+  width: auto;
+  height: auto;
+  max-width: min(90vw, 720px);
+  max-height: min(90vh, calc(100vh - 5.5rem));
+  pointer-events: none;
+  opacity: 0;
+  /* Grow from the clicked frame into center focus. */
+  transform: translate(
+      calc(-50% + (var(--from-left) - 50vw) * 0.88),
+      calc(-50% + (var(--from-top) - 48vh) * 0.88)
+    )
+    scale(0.32);
+  transform-origin: center center;
+  transition:
+    opacity 0.52s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.72s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.series-expand.is-viewer-in .series-viewer__stage {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.series-viewer__frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: min(90vw, 720px);
+  max-height: min(90vh, calc(100vh - 5.5rem));
+  border-radius: 2px;
+}
+
+.series-viewer__img {
+  width: auto !important;
+  height: auto !important;
+  max-width: min(90vw, 720px);
+  max-height: min(90vh, calc(100vh - 5.5rem));
+  object-fit: contain;
+}
+
+@media (max-width: 767px) {
+  .series-viewer__stage,
+  .series-viewer__frame,
+  .series-viewer__img {
+    max-width: min(92vw, 440px);
+    max-height: min(82vh, calc(100vh - 6rem));
+  }
+}
+
+.series-viewer__chrome {
+  position: absolute;
+  z-index: 2;
+  left: clamp(1rem, 1.39vw, 1.5rem);
+  right: clamp(1rem, 1.39vw, 1.5rem);
+  bottom: clamp(1.1rem, 2.22vh, 1.75rem);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  column-gap: 1.25rem;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate3d(0, 12px, 0);
+  transition:
+    opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1) 180ms,
+    transform 0.5s cubic-bezier(0.22, 1, 0.36, 1) 180ms;
+}
+
+.series-expand.is-viewer-in .series-viewer__chrome {
+  opacity: 1;
+  transform: none;
+}
+
+.series-viewer__chrome > .series-viewer__btn {
+  justify-self: start;
+}
+
+.series-viewer__btn {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  pointer-events: auto;
+  font-family: var(--font-sans-face), "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: clamp(0.95rem, 1.8vw, 1.15rem);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-transform: lowercase;
+  opacity: 0.72;
+  transition: opacity 220ms ease;
+}
+
+.series-viewer__btn:hover {
+  opacity: 1;
+}
+
+.series-viewer__count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28em;
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-sans-face), "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: clamp(0.95rem, 1.8vw, 1.15rem);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-transform: lowercase;
+  opacity: 0.72;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.series-viewer__count-sep {
+  opacity: 0.55;
+}
+
+.series-viewer__steps {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: clamp(1rem, 1.39vw, 1.4rem);
+  pointer-events: auto;
+}
+
+@keyframes series-scatter-open {
   from {
     opacity: 0;
-    transform: translate3d(0, -28px, 0) scale(0.92);
+    transform: translate3d(0, -22px, 0) scale(0.97);
   }
   to {
     opacity: 1;
@@ -830,7 +1169,7 @@ html.has-cursor-none * {
 @keyframes series-shot-down {
   from {
     opacity: 0;
-    transform: translate3d(0, -40px, 0) scale(1.06);
+    transform: translate3d(0, -36px, 0) scale(1.04);
   }
   to {
     opacity: 1;
@@ -838,40 +1177,149 @@ html.has-cursor-none * {
   }
 }
 
-/* Keep the series title where it is; lift it above the wash. */
-html.series-expand-open .image-series__titles {
-  z-index: 70;
+@media (max-width: 767px) {
+  .series-expand__panel {
+    --scatter-gap: clamp(3.25rem, 18vw, 5.5rem);
+    --scatter-top: clamp(4.75rem, 12vh, 6.25rem);
+    padding: 0 1.1rem;
+  }
+
+  .series-expand__row--pair {
+    flex-direction: column;
+    align-items: stretch;
+    gap: clamp(2.5rem, 14vw, 4rem);
+  }
+
+  .series-expand__row[data-pos="1"] .series-expand__shot,
+  .series-expand__row[data-pos="3"] .series-expand__shot,
+  .series-expand__row--pair[data-pos="4"] .series-expand__shot:first-child,
+  .series-expand__row--pair[data-pos="5"] .series-expand__shot:first-child {
+    width: min(72vw, 280px);
+    margin-left: 0;
+    margin-right: auto;
+  }
+
+  .series-expand__row[data-pos="2"] .series-expand__shot,
+  .series-expand__row[data-pos="4"]:not(.series-expand__row--pair) .series-expand__shot,
+  .series-expand__row--pair[data-pos="4"] .series-expand__shot:last-child,
+  .series-expand__row--pair[data-pos="5"] .series-expand__shot:last-child {
+    width: min(64vw, 250px);
+    margin-left: auto;
+    margin-right: 0;
+  }
+
+  .series-expand__row[data-pos="5"]:not(.series-expand__row--pair) .series-expand__shot {
+    width: min(78vw, 300px);
+    margin-left: 8vw;
+    margin-right: auto;
+  }
+
+  .series-expand__row[data-pos="3"] .series-expand__shot {
+    width: min(52vw, 200px);
+    margin-left: 6vw;
+  }
+
 }
 
-html.series-expand-open .image-series__track {
+/*
+ * Hide About under an open expand — delay so expand can fade in over it.
+ * During nav-exit the rule above re-shows the section; JS owns band opacity.
+ */
+html.series-expand-open:not(.series-expand-nav-exit) .story-about {
   opacity: 0;
-  pointer-events: none !important;
-  transition: opacity 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0s linear 400ms,
+    visibility 0s linear 400ms;
 }
 
-html.series-expand-open .studio-rail,
-html.series-expand-open .site-nav {
+/* Hide the centered album name while the scatter expand is open. */
+html.series-expand-open .image-series__titles,
+html.series-expand-nav-exit .image-series__titles {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
 }
 
-html.series-expand-open .story-page__content {
+html.series-expand-open .image-series__track,
+html.series-expand-nav-exit .image-series__track {
+  opacity: 0;
+  pointer-events: none !important;
+  transition: opacity 380ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Nav is a sibling of the expand (not trapped in .story-page) — keep it above. */
+html.series-expand-open .studio-rail,
+html.series-expand-open .site-nav,
+html.series-expand-nav-exit .studio-rail,
+html.series-expand-nav-exit .site-nav {
+  z-index: 70;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: none; /* links/buttons re-enable below */
+  transition: opacity 280ms ease, visibility 0s linear 0s;
+}
+
+html.series-expand-open .studio-rail__name,
+html.series-expand-open .studio-rail__nav,
+html.series-expand-open .site-nav__brand,
+html.series-expand-open .site-nav__links,
+html.series-expand-nav-exit .studio-rail__name,
+html.series-expand-nav-exit .studio-rail__nav,
+html.series-expand-nav-exit .site-nav__brand,
+html.series-expand-nav-exit .site-nav__links {
+  pointer-events: auto;
+}
+
+/* Hide nav while a single photo is focused. */
+html.series-viewer-open .studio-rail,
+html.series-viewer-open .site-nav {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 280ms ease,
+    visibility 0s linear 280ms;
+}
+
+html.series-expand-open:not(.series-expand-nav-exit) .story-page__content {
   pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .series-expand,
   .series-expand.is-open,
-  html.series-expand-open .image-series__track {
+  html.series-expand-open .image-series__track,
+  html.series-expand-nav-exit .image-series__track,
+  .series-viewer__dim,
+  .series-viewer__stage,
+  .series-viewer__chrome,
+  .series-expand__shot {
     transition: none;
   }
 
-  .series-expand.is-open .series-expand__panel,
-  .series-expand.is-open .series-expand__shot {
+  .series-expand.is-open:not(.is-nav-exit) .series-expand__panel,
+  .series-expand.is-open [data-series-loop="1"] .series-expand__shot {
     animation: none;
     opacity: 1;
     transform: none;
+  }
+
+  .series-expand.is-nav-exit .series-expand__panel,
+  .series-expand.is-nav-exit .series-expand__wash {
+    opacity: 0 !important;
+    transform: none !important;
+  }
+
+  .series-expand.is-viewing .series-expand__shot {
+    opacity: 0.08;
+    transform: none;
+    filter: none;
+  }
+
+  .series-expand.is-viewing .series-expand__shot[data-viewer-origin] {
+    opacity: 0;
   }
 }
 

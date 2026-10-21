@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { albums } from "@/content/photos";
-import { openSeriesExpand } from "@/content/seriesExpandUi";
 import { site } from "@/content/site";
-import { onNavSectionClick } from "@/lib/navScroll";
+import { onNavSectionClick, openAlbumFromNav } from "@/lib/navScroll";
 
 function scrollToImage() {
   const target =
@@ -145,7 +144,7 @@ export function StickyNav() {
                                 <button
                                   type="button"
                                   tabIndex={imageOpen ? 0 : -1}
-                                  onClick={() => openSeriesExpand(album.id)}
+                                  onClick={() => openAlbumFromNav(album.id)}
                                   style={{ ["--i" as string]: albumIndex }}
                                 >
                                   {album.label.replace(/^series:\s*/i, "")}
