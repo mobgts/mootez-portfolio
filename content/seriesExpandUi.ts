@@ -1,3 +1,5 @@
+import { setPageHash } from "@/lib/pageHash";
+
 type Listener = () => void;
 
 export type TitleSnapshot = {
@@ -16,11 +18,15 @@ export type FrameSnapshot = {
   height: number;
 };
 
+export type SeriesExpandNavExit = "about" | "contact";
+
 export type SeriesExpandState = {
   albumId: string | null;
   fromSlug?: string;
   titleSnap?: TitleSnapshot;
   fromRect?: FrameSnapshot;
+  /** Leave the scatter toward About/Contact (nav), instead of a plain close. */
+  navExit?: SeriesExpandNavExit | null;
 };
 
 let state: SeriesExpandState = { albumId: null };
@@ -32,6 +38,10 @@ function notify() {
 
 export function getSeriesExpand(): SeriesExpandState {
   return state;
+}
+
+export function isSeriesExpandOpen() {
+  return Boolean(state.albumId);
 }
 
 export function captureTitleSnapshot(
@@ -71,13 +81,31 @@ export function openSeriesExpand(
   titleSnap?: TitleSnapshot,
   fromRect?: FrameSnapshot,
 ) {
-  state = { albumId, fromSlug, titleSnap, fromRect };
+  state = { albumId, fromSlug, titleSnap, fromRect, navExit: null };
+  setPageHash(albumId);
   notify();
+}
+
+/** Leave scatter: About ← album right; Contact ← album left. */
+export function exitSeriesExpandTo(target: SeriesExpandNavExit) {
+  if (!state.albumId) return false;
+  if (state.navExit === target) return true;
+  state = { ...state, navExit: target };
+  notify();
+  return true;
 }
 
 export function closeSeriesExpand() {
   if (!state.albumId) return;
-  state = { albumId: null };
+  const closedId = state.albumId;
+  state = { albumId: null, navExit: null };
+  // Don't wipe #about / #contact if nav already moved the hash.
+  if (
+    typeof window !== "undefined" &&
+    window.location.hash === `#${closedId}`
+  ) {
+    setPageHash(null);
+  }
   notify();
 }
 

@@ -2,7 +2,9 @@
 
 import Image from "next/image";
 import {
+  useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -11,14 +13,41 @@ import {
 import {
   closeSeriesExpand,
   getSeriesExpand,
-  openSeriesExpand,
   subscribeSeriesExpand,
   type FrameSnapshot,
 } from "@/content/seriesExpandUi";
-import { albums, getAlbum } from "@/content/photos";
+import { getAlbum } from "@/content/photos";
 import type { Album, Photo } from "@/content/types";
 
 const EXIT_MS = 420;
+/** Fade the lightbox out before restoring scatter scroll. */
+const VIEWER_CLOSE_MS = 480;
+/** Match ImageSeries NAV_EXIT_MS — scatter flies right with About/Contact. */
+const NAV_EXIT_MS = 820;
+/** Triple the scatter so scroll can wrap without a seam. */
+const LOOP_COPIES = 3;
+
+function clamp01(n: number) {
+  return Math.min(1, Math.max(0, n));
+}
+
+function easeInOutCubic(t: number) {
+  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+}
+
+/** Cristina-style beats: left mid → right mid → small left → pair/large → large mid. */
+type ScatterPos = 1 | 2 | 3 | 4 | 5;
+
+type ScatterRow =
+  | { key: string; pos: ScatterPos; photos: [Photo]; paired?: false }
+  | { key: string; pos: 4 | 5; photos: [Photo, Photo]; paired: true };
+
+type FromFrame = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
 
 function photoAspectClass(span: Photo["span"]) {
   if (span === "wide") return "aspect-[3/2]";
@@ -26,125 +55,637 @@ function photoAspectClass(span: Photo["span"]) {
   return "aspect-[3/4]";
 }
 
-function nextAlbum(album: Album) {
-  const index = albums.findIndex((entry) => entry.id === album.id);
-  if (index < 0 || albums.length < 2) return null;
-  return albums[(index + 1) % albums.length] ?? null;
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+/**
+ * Editorial scatter — not a grid. Cycles five placement beats; longer albums
+ * get occasional side-by-side pairs on beats 4 and 5.
+ */
+function buildScatterRows(photos: Photo[]): ScatterRow[] {
+  const rows: ScatterRow[] = [];
+  let i = 0;
+  let beat = 0;
+  const allowPairs = photos.length >= 5;
+
+  while (i < photos.length) {
+    const pos = ((beat % 5) + 1) as ScatterPos;
+    const canPair =
+      allowPairs &&
+      (pos === 4 || pos === 5) &&
+      i + 1 < photos.length;
+
+    if (canPair) {
+      rows.push({
+        key: `${photos[i]!.slug}+${photos[i + 1]!.slug}`,
+        pos,
+        photos: [photos[i]!, photos[i + 1]!],
+        paired: true,
+      });
+      i += 2;
+    } else {
+      rows.push({
+        key: photos[i]!.slug,
+        pos,
+        photos: [photos[i]!],
+      });
+      i += 1;
+    }
+    beat += 1;
+  }
+
+  return rows;
+}
+
+function ScatterFrame({
+  photo,
+  index,
+  sizes,
+  onOpen,
+}: {
+  photo: Photo;
+  index: number;
+  sizes: string;
+  onOpen: (slug: string, el: HTMLElement) => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-expand-slug={photo.slug}
+      className="series-expand__shot"
+      style={{ ["--i" as string]: index }}
+      aria-label={photo.alt}
+      onClick={(event) => onOpen(photo.slug, event.currentTarget)}
+    >
+      <span
+        className={`series-expand__frame relative block overflow-hidden bg-[#221c16] ${photoAspectClass(photo.span)}`}
+      >
+        <Image
+          src={photo.src}
+          alt=""
+          fill
+          quality={85}
+          sizes={sizes}
+          className="object-cover"
+          priority={index < 4}
+        />
+      </span>
+    </button>
+  );
+}
+
+function ScatterRows({
+  rows,
+  copy,
+  animate,
+  onOpen,
+}: {
+  rows: ScatterRow[];
+  copy: number;
+  animate: boolean;
+  onOpen: (slug: string, el: HTMLElement) => void;
+}) {
+  let shotIndex = copy * 64;
+
+  return (
+    <>
+      {rows.map((row) => {
+        if (row.paired) {
+          const left = shotIndex++;
+          const right = shotIndex++;
+          return (
+            <div
+              key={`${copy}-${row.key}`}
+              className="series-expand__row series-expand__row--pair"
+              data-pos={row.pos}
+            >
+              <ScatterFrame
+                photo={row.photos[0]}
+                index={animate ? left % 64 : 99}
+                sizes="(min-width: 768px) 32vw, 70vw"
+                onOpen={onOpen}
+              />
+              <ScatterFrame
+                photo={row.photos[1]}
+                index={animate ? right % 64 : 99}
+                sizes="(min-width: 768px) 12vw, 36vw"
+                onOpen={onOpen}
+              />
+            </div>
+          );
+        }
+
+        const index = shotIndex++;
+        return (
+          <div
+            key={`${copy}-${row.key}`}
+            className="series-expand__row"
+            data-pos={row.pos}
+          >
+            <ScatterFrame
+              photo={row.photos[0]}
+              index={animate ? index % 64 : 99}
+              sizes="(min-width: 768px) 26vw, 72vw"
+              onOpen={onOpen}
+            />
+          </div>
+        );
+      })}
+    </>
+  );
 }
 
 function SeriesExpandView({
   album,
   fromRect,
   open,
+  navExit,
   onClose,
-  onOpenAlbum,
 }: {
   album: Album;
   fromRect?: FrameSnapshot;
   open: boolean;
+  navExit: "about" | "contact" | null;
   onClose: () => void;
-  onOpenAlbum: (albumId: string) => void;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const next = nextAlbum(album);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const washRef = useRef<HTMLDivElement>(null);
+  const rows = useMemo(() => buildScatterRows(album.photos), [album.photos]);
+  const photos = album.photos;
+  const total = photos.length;
+
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [fromFrame, setFromFrame] = useState<FromFrame | null>(null);
+  /** After first entrance, never replay the album load animation. */
+  const [scatterReady, setScatterReady] = useState(false);
+  const viewerOpen = viewerIndex != null;
+  const viewerTimers = useRef<number[]>([]);
+  const savedScrollTop = useRef(0);
+  const savedSlug = useRef<string | null>(null);
+  /** When closing the viewer, loop restart must resume here — not midStart. */
+  const resumeScrollTop = useRef<number | null>(null);
 
   const fromX =
     fromRect != null ? fromRect.left + fromRect.width / 2 : undefined;
   const fromY =
     fromRect != null ? fromRect.top + fromRect.height / 2 : undefined;
 
+  const clearViewerTimers = useCallback(() => {
+    for (const id of viewerTimers.current) window.clearTimeout(id);
+    viewerTimers.current = [];
+  }, []);
+
+  const clearOriginMarks = useCallback(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    track
+      .querySelectorAll<HTMLElement>("[data-viewer-origin]")
+      .forEach((shot) => shot.removeAttribute("data-viewer-origin"));
+  }, []);
+
+  const markOriginShots = useCallback((slug: string) => {
+    const track = trackRef.current;
+    if (!track) return;
+    clearOriginMarks();
+    track
+      .querySelectorAll<HTMLElement>(`[data-expand-slug="${slug}"]`)
+      .forEach((shot) => shot.setAttribute("data-viewer-origin", "1"));
+  }, [clearOriginMarks]);
+
+  /** Put the scatter scroll back exactly where the click happened. */
+  const restoreScatterPlace = useCallback(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    scroller.scrollTop = savedScrollTop.current;
+  }, []);
+
+  const openViewer = useCallback(
+    (slug: string, el: HTMLElement) => {
+      const index = photos.findIndex((photo) => photo.slug === slug);
+      if (index < 0) return;
+      clearViewerTimers();
+      const scroller = scrollerRef.current;
+      if (scroller) savedScrollTop.current = scroller.scrollTop;
+      savedSlug.current = slug;
+      setScatterReady(true);
+      const rect = el.getBoundingClientRect();
+      markOriginShots(slug);
+      setFromFrame({
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      });
+      setViewerIndex(index);
+      setViewerVisible(false);
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => setViewerVisible(true));
+      });
+    },
+    [photos, clearViewerTimers, markOriginShots],
+  );
+
+  const closeViewer = useCallback(() => {
+    clearViewerTimers();
+    // Hand the saved place to the loop effect so it won't re-prime to album start.
+    resumeScrollTop.current = savedScrollTop.current;
+    restoreScatterPlace();
+    setViewerVisible(false);
+    viewerTimers.current.push(
+      window.setTimeout(() => {
+        resumeScrollTop.current = savedScrollTop.current;
+        restoreScatterPlace();
+        setViewerIndex(null);
+        setFromFrame(null);
+        clearOriginMarks();
+      }, VIEWER_CLOSE_MS),
+    );
+  }, [clearViewerTimers, clearOriginMarks, restoreScatterPlace]);
+
+  const stepViewer = useCallback(
+    (delta: number) => {
+      if (total < 1 || viewerIndex == null) return;
+      setViewerIndex((i) => {
+        if (i == null) return i;
+        return (i + delta + total) % total;
+      });
+      // After the first open, leave the gather origin so swaps stay centered.
+      setFromFrame(null);
+    },
+    [total, viewerIndex],
+  );
+
   useEffect(() => {
-    if (!open) return;
+    if (!open || navExit) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = prev;
     };
-  }, [open]);
+  }, [open, navExit]);
+
+  // Nav leave: drop the single-photo viewer so the scatter can fly out cleanly.
+  useEffect(() => {
+    if (!navExit || !viewerOpen) return;
+    clearViewerTimers();
+    setViewerVisible(false);
+    setViewerIndex(null);
+    setFromFrame(null);
+    clearOriginMarks();
+  }, [navExit, viewerOpen, clearViewerTimers, clearOriginMarks]);
+
+  /**
+   * About: album → right. Contact: album → left (Contact enters from right).
+   * Soft crossfade — photos stay readable until the section is mostly in.
+   */
+  useEffect(() => {
+    if (!navExit || !open) return;
+    const panel = trackRef.current;
+    const wash = washRef.current;
+    if (!panel) return;
+
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      panel.style.opacity = "0";
+      if (wash) wash.style.opacity = "0";
+      return;
+    }
+
+    const mobile = window.matchMedia("(max-width: 767px)").matches;
+    const spacing = mobile
+      ? Math.min(window.innerWidth * 0.98, 420)
+      : Math.min(window.innerWidth * 0.44, 520);
+    const travel = 1.9 * spacing;
+    // Contact: exit left. About: exit right.
+    const dir = navExit === "contact" ? -1 : 1;
+    const start = performance.now();
+    let raf = 0;
+
+    const tick = (now: number) => {
+      const raw = clamp01((now - start) / NAV_EXIT_MS);
+      const ease = easeInOutCubic(raw);
+      // Stay solid through most of the slide; fade only at the end.
+      const fadeT = clamp01((ease - 0.55) / 0.45);
+      const fade = easeInOutCubic(fadeT);
+      panel.style.transform = `translate3d(${(dir * ease * travel).toFixed(2)}px, 0, 0)`;
+      panel.style.opacity = (1 - fade).toFixed(3);
+      if (wash) wash.style.opacity = (1 - fade * 0.95).toFixed(3);
+      if (raw < 1) raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      panel.style.transform = "";
+      panel.style.opacity = "";
+      if (wash) wash.style.opacity = "";
+    };
+  }, [navExit, open]);
 
   useEffect(() => {
-    if (!open) return;
-    const scroller = scrollerRef.current;
-    if (scroller) scroller.scrollTop = 0;
-  }, [album.id, open]);
-
-  useEffect(() => {
-    if (!open) return;
+    if (!open || navExit) return;
     const onKey = (event: KeyboardEvent) => {
+      if (viewerOpen) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeViewer();
+          return;
+        }
+        if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+          event.preventDefault();
+          stepViewer(1);
+          return;
+        }
+        if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+          event.preventDefault();
+          stepViewer(-1);
+          return;
+        }
+        return;
+      }
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, open]);
+  }, [open, navExit, onClose, viewerOpen, closeViewer, stepViewer]);
+
+  // Wheel through the set while the viewer is open.
+  useEffect(() => {
+    if (!open || !viewerOpen || !viewerVisible) return;
+    let locked = false;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      if (locked) return;
+      if (Math.abs(event.deltaY) < 8) return;
+      locked = true;
+      stepViewer(event.deltaY > 0 ? 1 : -1);
+      window.setTimeout(() => {
+        locked = false;
+      }, 420);
+    };
+    window.addEventListener("wheel", onWheel, { passive: false });
+    return () => window.removeEventListener("wheel", onWheel);
+  }, [open, viewerOpen, viewerVisible, stepViewer]);
+
+  // Seamless loop: three equal copies; stay parked in the middle band.
+  useEffect(() => {
+    if (!open || viewerOpen) return;
+    const scroller = scrollerRef.current;
+    const track = trackRef.current;
+    if (!scroller || !track) return;
+
+    let wrapping = false;
+    let lastCycle = 0;
+
+    const loops = () =>
+      Array.from(
+        track.querySelectorAll<HTMLElement>("[data-series-loop]"),
+      );
+
+    const metrics = () => {
+      const items = loops();
+      const first = items[0];
+      const mid = items[1];
+      if (!first || !mid) return null;
+      const midStart = mid.offsetTop;
+      const cycle = midStart - first.offsetTop;
+      if (cycle < 8) return null;
+      return { cycle, midStart };
+    };
+
+    const normalize = (preferPrime = false) => {
+      const m = metrics();
+      if (!m) return;
+      const { cycle, midStart } = m;
+      wrapping = true;
+      const resume = resumeScrollTop.current;
+      if (resume != null) {
+        scroller.scrollTop = resume;
+        resumeScrollTop.current = null;
+      } else if (preferPrime || !lastCycle) {
+        scroller.scrollTop = midStart;
+      } else {
+        const rel = ((scroller.scrollTop - midStart) % cycle + cycle) % cycle;
+        scroller.scrollTop = midStart + rel;
+      }
+      lastCycle = cycle;
+      wrapping = false;
+    };
+
+    const onScroll = () => {
+      if (wrapping) return;
+      const m = metrics();
+      if (!m) return;
+      const { cycle, midStart } = m;
+      const y = scroller.scrollTop;
+
+      if (y < midStart) {
+        wrapping = true;
+        scroller.scrollTop = y + cycle;
+        wrapping = false;
+      } else if (y >= midStart + cycle) {
+        wrapping = true;
+        scroller.scrollTop = y - cycle;
+        wrapping = false;
+      }
+    };
+
+    const onResize = () => normalize(false);
+
+    // Closing a photo sets resumeScrollTop — honor it instead of jumping to start.
+    const shouldResume = resumeScrollTop.current != null;
+    normalize(!shouldResume);
+    const raf = window.requestAnimationFrame(() => {
+      if (resumeScrollTop.current != null || shouldResume) {
+        wrapping = true;
+        scroller.scrollTop = savedScrollTop.current;
+        wrapping = false;
+        const m = metrics();
+        if (m) lastCycle = m.cycle;
+        resumeScrollTop.current = null;
+      } else {
+        normalize(true);
+      }
+    });
+
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onResize);
+
+    const ro =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(onResize)
+        : null;
+    ro?.observe(track);
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+      scroller.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onResize);
+      ro?.disconnect();
+    };
+  }, [open, album.id, rows, viewerOpen]);
+
+  useEffect(() => {
+    if (!open) {
+      clearViewerTimers();
+      setViewerIndex(null);
+      setViewerVisible(false);
+      setFromFrame(null);
+      clearOriginMarks();
+      savedSlug.current = null;
+      resumeScrollTop.current = null;
+      setScatterReady(false);
+      return;
+    }
+    // Mark settled after the first entrance so closing a photo won't reload it.
+    const id = window.setTimeout(() => setScatterReady(true), 900);
+    return () => window.clearTimeout(id);
+  }, [open, album.id, clearViewerTimers, clearOriginMarks]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (viewerOpen) root.classList.add("series-viewer-open");
+    else root.classList.remove("series-viewer-open");
+    return () => root.classList.remove("series-viewer-open");
+  }, [viewerOpen]);
+
+  useEffect(() => () => clearViewerTimers(), [clearViewerTimers]);
+
+  const activePhoto =
+    viewerIndex != null ? photos[viewerIndex] ?? null : null;
+
+  const viewerStyle = {
+    ["--from-left" as string]: fromFrame ? `${fromFrame.left}px` : "50%",
+    ["--from-top" as string]: fromFrame ? `${fromFrame.top}px` : "50%",
+    ["--from-w" as string]: fromFrame ? `${fromFrame.width}px` : "40vw",
+    ["--from-h" as string]: fromFrame ? `${fromFrame.height}px` : "60vh",
+  } as CSSProperties;
+
+  const leaving = Boolean(navExit);
 
   return (
     <div
-      className={`series-expand${open ? " is-open" : ""}`}
+      className={`series-expand${open ? " is-open" : ""}${
+        leaving ? " is-nav-exit" : ""
+      }${scatterReady ? " is-scatter-ready" : ""}${
+        viewerOpen ? " is-viewing" : ""
+      }${viewerVisible ? " is-viewer-in" : ""}`}
       role="dialog"
-      aria-modal="true"
+      aria-modal={!leaving}
       aria-label={`${album.id} gallery`}
-      aria-hidden={!open}
+      aria-hidden={!open || leaving}
       style={
         {
           ["--from-x" as string]: fromX != null ? `${fromX}px` : "50%",
           ["--from-y" as string]: fromY != null ? `${fromY}px` : "42%",
+          ...viewerStyle,
         } as CSSProperties
       }
     >
-      <button
-        type="button"
-        className="series-expand__wash"
-        aria-label="Close gallery"
-        onClick={onClose}
-      />
+      <div ref={washRef} className="series-expand__wash" aria-hidden />
 
       <div ref={scrollerRef} className="series-expand__scroller">
-        <div className="series-expand__panel">
-          <div className="series-expand__grid">
-            {album.photos.map((photo, index) => (
-              <figure
-                key={photo.slug}
-                data-expand-slug={photo.slug}
-                className="series-expand__shot"
-                style={{ ["--i" as string]: index }}
-              >
-                <div
-                  className={`series-expand__frame relative overflow-hidden bg-[#221c16] ${photoAspectClass(photo.span)}`}
-                >
-                  <Image
-                    src={photo.src}
-                    alt={photo.alt}
-                    fill
-                    quality={85}
-                    sizes="(min-width: 768px) 260px, 44vw"
-                    className="object-cover"
-                    priority={index < 4}
-                  />
-                </div>
-              </figure>
-            ))}
+        <div ref={trackRef} className="series-expand__panel">
+          {Array.from({ length: LOOP_COPIES }, (_, copy) => (
+            <div
+              key={copy}
+              className="series-expand__loop"
+              data-series-loop={copy}
+            >
+              <div className="series-expand__scatter">
+                <ScatterRows
+                  rows={rows}
+                  copy={copy}
+                  animate={
+                    copy === 1 && open && !scatterReady && !viewerOpen && !leaving
+                  }
+                  onOpen={openViewer}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {!viewerOpen && !leaving ? (
+        <button
+          type="button"
+          className="series-expand__close"
+          onClick={onClose}
+        >
+          close
+        </button>
+      ) : null}
+
+      {viewerOpen && activePhoto ? (
+        <div className="series-viewer" style={viewerStyle}>
+          {/* Dim is visual only — close via the close control, not a screen tap. */}
+          <div className="series-viewer__dim" aria-hidden />
+
+          <div className="series-viewer__stage" aria-live="polite">
+            <div key={activePhoto.slug} className="series-viewer__frame">
+              <Image
+                src={activePhoto.src}
+                alt={activePhoto.alt}
+                width={
+                  activePhoto.span === "wide"
+                    ? 1600
+                    : activePhoto.span === "square"
+                      ? 1400
+                      : 1200
+                }
+                height={
+                  activePhoto.span === "wide"
+                    ? 1067
+                    : activePhoto.span === "square"
+                      ? 1400
+                      : 1600
+                }
+                quality={90}
+                sizes="(min-width: 768px) 42vw, 92vw"
+                className="series-viewer__img"
+                priority
+              />
+            </div>
           </div>
 
-          <footer className="series-expand__footer">
+          <div className="series-viewer__chrome">
             <button
               type="button"
-              className="series-expand__nav"
-              onClick={onClose}
+              className="series-viewer__btn"
+              onClick={closeViewer}
             >
               close
             </button>
-            {next ? (
+
+            <p className="series-viewer__count" aria-hidden>
+              <span>{pad2((viewerIndex ?? 0) + 1)}</span>
+              <span className="series-viewer__count-sep">–</span>
+              <span>{pad2(total)}</span>
+            </p>
+
+            <div className="series-viewer__steps">
               <button
                 type="button"
-                className="series-expand__nav series-expand__nav--next"
-                onClick={() => onOpenAlbum(next.id)}
+                className="series-viewer__btn"
+                onClick={() => stepViewer(-1)}
               >
-                {next.id}
+                prev
               </button>
-            ) : null}
-          </footer>
+              <button
+                type="button"
+                className="series-viewer__btn"
+                onClick={() => stepViewer(1)}
+              >
+                next
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
@@ -156,10 +697,12 @@ export function SeriesExpandHost() {
     getSeriesExpand,
   );
   const open = Boolean(ui.albumId);
+  const navExit = ui.navExit ?? null;
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(false);
   const lastId = useRef(ui.albumId);
   const lastRect = useRef(ui.fromRect);
+  const leftViaNav = useRef(false);
 
   if (ui.albumId) {
     lastId.current = ui.albumId;
@@ -168,6 +711,7 @@ export function SeriesExpandHost() {
 
   useEffect(() => {
     if (open) {
+      leftViaNav.current = false;
       setMounted(true);
       const id = window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => setVisible(true));
@@ -175,16 +719,40 @@ export function SeriesExpandHost() {
       return () => window.cancelAnimationFrame(id);
     }
     setVisible(false);
+    // Nav exit already flew the scatter away — unmount immediately.
+    if (leftViaNav.current) {
+      leftViaNav.current = false;
+      setMounted(false);
+      return;
+    }
     const timer = window.setTimeout(() => setMounted(false), EXIT_MS);
     return () => window.clearTimeout(timer);
   }, [open]);
 
+  // Finish the rightward leave, then clear expand state.
+  useEffect(() => {
+    if (!navExit) return;
+    leftViaNav.current = true;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const timer = window.setTimeout(
+      () => closeSeriesExpand(),
+      reduce ? 0 : NAV_EXIT_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [navExit]);
+
   useEffect(() => {
     const root = document.documentElement;
+    // Keep expand-open through nav-exit so About stays covered until reveal.
     if (visible) root.classList.add("series-expand-open");
     else root.classList.remove("series-expand-open");
-    return () => root.classList.remove("series-expand-open");
-  }, [visible]);
+    if (visible && navExit) root.classList.add("series-expand-nav-exit");
+    else root.classList.remove("series-expand-nav-exit");
+    return () => {
+      root.classList.remove("series-expand-open");
+      root.classList.remove("series-expand-nav-exit");
+    };
+  }, [visible, navExit]);
 
   if (!mounted || !lastId.current) return null;
 
@@ -197,8 +765,8 @@ export function SeriesExpandHost() {
       album={album}
       fromRect={lastRect.current}
       open={visible}
+      navExit={navExit}
       onClose={closeSeriesExpand}
-      onOpenAlbum={(albumId) => openSeriesExpand(albumId)}
     />
   );
 }

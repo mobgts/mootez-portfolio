@@ -21,7 +21,7 @@ export const site = {
   ] satisfies NavItem[],
   about: {
     story:
-      "I'm trying to consolidate my digital hobbies here (sometimes not so much hobbies). I build digital experiences that feel personal, I shoot photos, I mix sometimes, and I love to keep improving at the intersection. I'll see where this gets me. Love to have you on the journey :)",
-    body: "My name is Mootez Boughattas, based in Bonn. If you're interested to know more, hit me up!",
+      "Hey, I am Mootez Boughattas, an independent photographer based in Bonn. I believe in self-expression through stopping motion, and keeping motion too :) I started a journey of holding lenses years ago. I’m honoured to take you through it, and through what and how I see.",
+    body: "My style is expanding, but the human element will mostly stay at its core. Sometimes I’m spontaneous with street photography, but lately directing and editorial work have been giving me joy.",
   },
 };

@@ -1,3 +1,11 @@
+import {
+  exitSeriesExpandTo,
+  isSeriesExpandOpen,
+  closeSeriesExpand,
+  openSeriesExpand,
+} from "@/content/seriesExpandUi";
+import { setPageHash } from "@/lib/pageHash";
+
 /** Sections that sit past the long album runway. */
 export type JumpSection = "about" | "contact";
 export type NavZone = "albums" | "about" | "contact";
@@ -188,6 +196,7 @@ function snapScroll(top: number) {
 
 /**
  * Jump / handoff to About or Contact based on where we are:
+ * - album expand open → scatter flies right, About/Contact arrive
  * - albums → about/contact: skip album scrub (series exit)
  * - about ↔ contact: same left/right motion as scrolling the handoff
  */
@@ -197,7 +206,22 @@ export function jumpToSection(id: JumpSection) {
 
   const from = currentNavZone();
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  history.replaceState(null, "", `#${id}`);
+  setPageHash(id);
+
+  // Open album: leave the scatter the same way the landing album leaves.
+  if (isSeriesExpandOpen()) {
+    if (reduce) {
+      closeSeriesExpand();
+      snapScroll(top);
+      return;
+    }
+    exitSeriesExpandTo(id);
+    window.dispatchEvent(
+      new CustomEvent("series-nav-exit", { detail: { target: id } }),
+    );
+    snapScroll(top);
+    return;
+  }
 
   if (from === id) {
     snapScroll(top);
@@ -245,4 +269,76 @@ export function onNavSectionClick(
   event.preventDefault();
   jumpToSection(id);
   return true;
+}
+
+/** Brand mark — scroll home without leaving a #top / #image hash. */
+export function onBrandClick(event: { preventDefault(): void }) {
+  event.preventDefault();
+  setPageHash(null);
+  if (isSeriesExpandOpen()) closeSeriesExpand();
+  clearAboutChrome();
+  snapScroll(0);
+}
+
+/** Drop About/Contact pin styles left over from a series leave. */
+function clearAboutChrome() {
+  delete document.documentElement.dataset.aboutFromSeries;
+  for (const sel of ["[data-about-arrive]", "[data-contact-block]"]) {
+    const el = document.querySelector<HTMLElement>(sel);
+    if (!el) continue;
+    el.style.position = "";
+    el.style.top = "";
+    el.style.left = "";
+    el.style.right = "";
+    el.style.width = "";
+    el.style.maxWidth = "";
+    el.style.paddingLeft = "";
+    el.style.paddingRight = "";
+    el.style.zIndex = "";
+    el.style.willChange = "";
+    el.style.transform = "";
+    el.style.opacity = "";
+    el.style.visibility = "";
+    el.style.pointerEvents = "";
+  }
+  const sticky = document.querySelector<HTMLElement>(".image-series__sticky");
+  if (sticky) {
+    sticky.style.opacity = "";
+    sticky.style.visibility = "";
+    sticky.style.pointerEvents = "";
+  }
+}
+
+/**
+ * Nav album pick — cover first, then park the runway under the expand
+ * so About never clears to cream before the scatter is up.
+ */
+export function openAlbumFromNav(albumId: string) {
+  openSeriesExpand(albumId);
+
+  const prepareUnderCover = () => {
+    clearAboutChrome();
+    window.dispatchEvent(
+      new CustomEvent("series-focus-album", { detail: { albumId } }),
+    );
+  };
+
+  // Wait until expand is covering, then scroll/clear underneath.
+  if (document.documentElement.classList.contains("series-expand-open")) {
+    prepareUnderCover();
+    return;
+  }
+
+  const start = performance.now();
+  const wait = () => {
+    if (
+      document.documentElement.classList.contains("series-expand-open") ||
+      performance.now() - start > 500
+    ) {
+      prepareUnderCover();
+      return;
+    }
+    requestAnimationFrame(wait);
+  };
+  requestAnimationFrame(wait);
 }

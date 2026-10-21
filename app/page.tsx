@@ -11,12 +11,13 @@ export default function Home() {
     <>
       <StoryShell>
         <PageTint />
-        <StudioRail />
-        <StickyNav />
         <Hero />
         {/* Sound + Dev parked for now */}
         <About />
       </StoryShell>
+      {/* Nav + expand sit outside the page stacking context so nav can stay above the album. */}
+      <StudioRail />
+      <StickyNav />
       <SeriesExpandHost />
     </>
   );
