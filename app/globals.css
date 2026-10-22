@@ -18,6 +18,14 @@
   --tint-nav: rgb(252 250 247 / 0.92);
   --cursor-glow: 143 146 80;
   --staple-hue: 116deg;
+  /* Large viewport: the URL bar hiding must not resize stages or the scroll axis. */
+  --app-h: 100vh;
+}
+
+@supports (height: 100lvh) {
+  :root {
+    --app-h: 100lvh;
+  }
 }
 
 @theme inline {
@@ -40,12 +48,19 @@ html {
   scroll-behavior: smooth;
   background-color: var(--paper);
   overscroll-behavior-y: none;
+  /* JS pins and scrubs move content while scrolling — anchoring fights it. */
+  overflow-anchor: none;
 }
 
 @media (pointer: coarse) {
   html {
     /* Native touch momentum - CSS smooth-scroll fights finger scrolling. */
     scroll-behavior: auto;
+  }
+
+  body {
+    /* Horizontal finger travel goes to the album/about axis scrub, never the browser. */
+    touch-action: pan-y pinch-zoom;
   }
 }
 
@@ -64,7 +79,7 @@ body {
 .story-about {
   position: relative;
   z-index: 20;
-  margin-top: -100svh;
+  margin-top: calc(-1 * var(--app-h));
   color: var(--ink);
 }
 
@@ -85,7 +100,7 @@ body {
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 100svh;
+  height: var(--app-h);
   /* clip: hide sliding bands without creating a scrollport that kills sticky. */
   overflow: clip;
 }
@@ -104,17 +119,12 @@ body {
 @media (max-width: 767px) {
   .about-handoff {
     /* aboutHold + handoff + contactHold + 1 — keep in sync with About.tsx */
-    min-height: 405vh;
-  }
-
-  .about-handoff__sticky {
-    /* Vertical native scroll; horizontal scrub claimed in JS (same as albums). */
-    touch-action: pan-y;
+    min-height: calc(4.05 * var(--app-h));
   }
 
   .about-handoff__band {
     width: 100%;
-    max-height: 100svh;
+    max-height: var(--app-h);
     overflow: clip;
     padding-top: 3.25rem;
     padding-bottom: 1rem;
@@ -242,8 +252,8 @@ html.has-cursor-none * {
 .site-nav__brand {
   display: block;
   flex-shrink: 0;
-  padding: 0.4rem 0.15rem;
-  margin: -0.35rem -0.15rem 0;
+  padding: 0.75rem 0.5rem;
+  margin: -0.7rem -0.5rem 0;
   font-family: var(--font-sans-face), "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: clamp(1.15rem, 5vw, 1.4rem);
   font-weight: 500;
@@ -319,9 +329,9 @@ html.has-cursor-none * {
   position: relative;
   display: inline-flex;
   align-items: baseline;
-  /* Roomier hit target without changing the visual size. */
-  padding: 0.55rem 0.2rem;
-  margin: -0.55rem -0.2rem;
+  /* ~44px hit target without changing the visual size. */
+  padding: 0.9rem 0.4rem;
+  margin: -0.9rem -0.4rem;
   border: 0;
   background: none;
   color: var(--ink);
@@ -404,8 +414,8 @@ html.has-cursor-none * {
 
 .site-nav__albums-row button {
   display: block;
-  padding: 0.45rem 0.2rem;
-  margin: -0.2rem -0.2rem;
+  padding: 0.75rem 0.6rem;
+  margin: -0.5rem -0.6rem;
   border: 0;
   background: none;
   color: var(--ink);
@@ -622,7 +632,7 @@ html.has-cursor-none * {
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 100svh;
+  height: var(--app-h);
   overflow: hidden;
   pointer-events: none;
 }
@@ -716,12 +726,6 @@ html.has-cursor-none * {
     padding-top: 2.5rem;
   }
 
-  .image-series__sticky {
-    /* Sit under the fixed mobile nav without clipping the title. */
-    height: 100svh;
-    /* Vertical native scroll; horizontal scrub is claimed in JS once underway. */
-    touch-action: pan-y;
-  }
 }
 
 .image-series__frame-inner {
@@ -1050,6 +1054,12 @@ html.series-expand-nav-exit .story-about {
   pointer-events: none;
 }
 
+.series-expand.is-viewer-in .series-viewer {
+  /* Whole screen takes swipes; pinch still zooms the photo. */
+  pointer-events: auto;
+  touch-action: pinch-zoom;
+}
+
 .series-viewer__dim {
   position: absolute;
   inset: 0;
@@ -1065,6 +1075,8 @@ html.series-expand-nav-exit .story-about {
 
 .series-expand.is-viewer-in .series-viewer__dim {
   opacity: 1;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .series-viewer__stage {
@@ -1091,6 +1103,8 @@ html.series-expand-nav-exit .story-about {
 }
 
 .series-expand.is-viewer-in .series-viewer__stage {
+  /* Taps on the photo itself shouldn't fall through to the dim and close. */
+  pointer-events: auto;
   opacity: 1;
   transform: translate(-50%, -50%) scale(1);
 }

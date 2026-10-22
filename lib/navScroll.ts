@@ -5,6 +5,7 @@ import {
   openSeriesExpand,
 } from "@/content/seriesExpandUi";
 import { setPageHash } from "@/lib/pageHash";
+import { viewportH } from "@/lib/viewport";
 
 /** Sections that sit past the long album runway. */
 export type JumpSection = "about" | "contact";
@@ -69,7 +70,7 @@ function aboutPanel() {
  */
 function sectionTop(id: JumpSection) {
   const panel = aboutPanel();
-  const viewH = window.innerHeight;
+  const viewH = viewportH();
 
   if (panel) {
     const panelDocTop = panel.getBoundingClientRect().top + window.scrollY;
@@ -97,12 +98,12 @@ function seriesCoveringView() {
   const sticky = document.querySelector<HTMLElement>(".image-series__sticky");
   if (!sticky) return false;
   if (sticky.style.visibility === "hidden") return false;
-  return sticky.getBoundingClientRect().bottom > window.innerHeight * 0.35;
+  return sticky.getBoundingClientRect().bottom > viewportH() * 0.35;
 }
 
 /**
  * About sticky owns the view (series has handed off). The tall series panel
- * still overlaps via margin-top: -100svh, so don't use its box alone.
+ * still overlaps via a negative one-viewport margin, so don't use its box alone.
  */
 function aboutHandoffOwnsView() {
   const panel = aboutPanel();
@@ -121,8 +122,8 @@ function seriesStillActive() {
   if (!panel) return false;
   const rect = panel.getBoundingClientRect();
   return (
-    rect.top < window.innerHeight * 0.15 &&
-    rect.bottom > window.innerHeight * 0.55
+    rect.top < viewportH() * 0.15 &&
+    rect.bottom > viewportH() * 0.55
   );
 }
 
@@ -132,7 +133,7 @@ export function currentNavZone(): NavZone {
   if (aboutHandoffOwnsView()) {
     const panel = aboutPanel();
     if (!panel) return "about";
-    const viewH = window.innerHeight;
+    const viewH = viewportH();
     const top = panel.getBoundingClientRect().top;
     const total = Math.max(panel.offsetHeight - viewH, 1);
     const progress = clamp01(-top / total);

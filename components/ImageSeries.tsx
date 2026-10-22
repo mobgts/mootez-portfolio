@@ -13,6 +13,7 @@ import { albums } from "@/content/photos";
 import type { Album, Photo } from "@/content/types";
 import { bindMobileAxisScrub } from "@/lib/mobileAxisScrub";
 import { useSoftDrift } from "@/lib/softDrift";
+import { viewportH } from "@/lib/viewport";
 function openExpand(
   album: Album,
   photo: Photo,
@@ -48,6 +49,8 @@ const VISUAL_STEP_GAP = 1.9;
 const REEL_MS = 160;
 /** Short leave when nav jumps past the album runway. */
 const NAV_EXIT_MS = 820;
+/** Repaint cadence (frames) while the page isn't scrolling. */
+const IDLE_PAINT_EVERY = 8;
 function isMobileSeries() {
   return window.matchMedia("(max-width: 767px)").matches;
 }
@@ -436,7 +439,7 @@ export function ImageSeries() {
       const usable = Math.max(runwayVh(slots, vh), 0.001);
       const progress = clamp01(walked / usable);
 
-      const viewH = window.innerHeight;
+      const viewH = viewportH();
       const total = Math.max(panel.offsetHeight - viewH, 1);
       const panelDocTop = panel.getBoundingClientRect().top + window.scrollY;
       const top = panelDocTop + progress * total;
@@ -553,7 +556,7 @@ export function ImageSeries() {
     let raf = 0;
 
     const paint = (now = performance.now()) => {
-      const viewH = window.innerHeight;
+      const viewH = viewportH();
       const total = Math.max(panel.offsetHeight - viewH, 1);
       const top = panel.getBoundingClientRect().top;
       const progress = clamp01(-top / total);
@@ -662,7 +665,7 @@ export function ImageSeries() {
           interactive: boolean,
         ) => {
           el.style.position = "fixed";
-          el.style.top = "50%";
+          el.style.top = "calc(var(--app-h) / 2)";
           el.style.left = "50%";
           el.style.right = "auto";
           el.style.width = mobile ? "100%" : "min(100%, 64rem)";
@@ -898,7 +901,7 @@ export function ImageSeries() {
       const detail = (event as CustomEvent<{ target?: string }>).detail;
       const target =
         detail?.target === "contact" ? "contact" : ("about" as const);
-      const viewH = window.innerHeight;
+      const viewH = viewportH();
       const total = Math.max(panel.offsetHeight - viewH, 1);
       const top = panel.getBoundingClientRect().top;
       const progress = clamp01(-top / total);
@@ -933,8 +936,19 @@ export function ImageSeries() {
       releasedToAbout = false;
     };
 
+    // Idle frames only repaint occasionally (expand/About flags can still flip)
+    // so taps and native scroll aren't starved on phones.
+    let lastScrollY = Number.NaN;
+    let idleFrames = 0;
     const tick = (now: number) => {
-      paint(now);
+      const y = window.scrollY;
+      if (y !== lastScrollY || navExit) {
+        lastScrollY = y;
+        idleFrames = 0;
+        paint(now);
+      } else if (++idleFrames % IDLE_PAINT_EVERY === 0) {
+        paint(now);
+      }
       raf = requestAnimationFrame(tick);
     };
 
@@ -978,7 +992,7 @@ export function ImageSeries() {
       <div
         ref={panelRef}
         className="image-series__panel"
-        style={{ height: `${runway * 100}vh` }}
+        style={{ height: `calc(${runway} * var(--app-h))` }}
         data-series="all"
       >
         <div className="image-series__sticky">
