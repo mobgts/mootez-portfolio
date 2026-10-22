@@ -37,11 +37,11 @@ export function StoryShell({ children }: { children: ReactNode }) {
 
   return (
     <div
-      className={`story-page color-still relative min-h-svh w-full${
+      className={`story-page color-still relative min-h-[var(--app-h)] w-full${
         ready ? " is-ready" : ""
       }`}
     >
-      <div className="pointer-events-none fixed inset-0 z-0 h-svh w-full" aria-hidden>
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-0 h-[var(--app-h)] w-full" aria-hidden>
         <AnimatedGradient
           key="page-gradient"
           config={gradientConfig}

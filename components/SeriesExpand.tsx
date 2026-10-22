@@ -9,6 +9,7 @@ import {
   useState,
   useSyncExternalStore,
   type CSSProperties,
+  type TouchEvent,
 } from "react";
 import {
   closeSeriesExpand,
@@ -26,6 +27,8 @@ const VIEWER_CLOSE_MS = 480;
 const NAV_EXIT_MS = 820;
 /** Triple the scatter so scroll can wrap without a seam. */
 const LOOP_COPIES = 3;
+/** Horizontal finger travel (px) that steps the single-photo viewer. */
+const SWIPE_MIN_PX = 48;
 
 function clamp01(n: number) {
   return Math.min(1, Math.max(0, n));
@@ -316,6 +319,33 @@ function SeriesExpandView({
       setFromFrame(null);
     },
     [total, viewerIndex],
+  );
+
+  const viewerSwipe = useRef<{ x: number; y: number; t: number } | null>(null);
+
+  const onViewerTouchStart = useCallback((event: TouchEvent) => {
+    const t = event.touches[0];
+    viewerSwipe.current =
+      t && event.touches.length === 1
+        ? { x: t.clientX, y: t.clientY, t: event.timeStamp }
+        : null;
+  }, []);
+
+  const onViewerTouchEnd = useCallback(
+    (event: TouchEvent) => {
+      const start = viewerSwipe.current;
+      viewerSwipe.current = null;
+      const t = event.changedTouches[0];
+      if (!start || !t || !viewerVisible) return;
+      const dx = t.clientX - start.x;
+      const dy = t.clientY - start.y;
+      const fast = event.timeStamp - start.t < 260;
+      const far = Math.abs(dx) > (fast ? 24 : SWIPE_MIN_PX);
+      if (!far || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+      // Finger left → next photo, right → previous.
+      stepViewer(dx < 0 ? 1 : -1);
+    },
+    [viewerVisible, stepViewer],
   );
 
   useEffect(() => {
@@ -621,9 +651,23 @@ function SeriesExpandView({
       ) : null}
 
       {viewerOpen && activePhoto ? (
-        <div className="series-viewer" style={viewerStyle}>
-          {/* Dim is visual only — close via the close control, not a screen tap. */}
-          <div className="series-viewer__dim" aria-hidden />
+        <div
+          className="series-viewer"
+          style={viewerStyle}
+          onTouchStart={onViewerTouchStart}
+          onTouchEnd={onViewerTouchEnd}
+          onTouchCancel={() => {
+            viewerSwipe.current = null;
+          }}
+        >
+          {/* Tap outside the photo closes; the photo itself swallows taps. */}
+          <div
+            className="series-viewer__dim"
+            aria-hidden
+            onClick={() => {
+              if (viewerVisible) closeViewer();
+            }}
+          />
 
           <div className="series-viewer__stage" aria-live="polite">
             <div key={activePhoto.slug} className="series-viewer__frame">

@@ -36,6 +36,8 @@ export function StickyNav() {
 
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
     if (reduce.matches) return;
+    // Phones: a still bar reads as tappable; moving labels feel like misses.
+    if (window.matchMedia("(pointer: coarse)").matches) return;
 
     const items = Array.from(
       bar.querySelectorAll<HTMLElement>("[data-rail-drift]"),

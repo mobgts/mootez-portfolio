@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/spiral-3d-slider";
 import { bindMobileAxisScrub } from "@/lib/mobileAxisScrub";
 import { useSoftDrift } from "@/lib/softDrift";
+import { viewportH } from "@/lib/viewport";
 import { AboutPhoto } from "./AboutPhoto";
 import { SilkArrive, useSilkDrive } from "./AboutSilk";
 
@@ -91,7 +92,7 @@ function paintBand(
 /** Viewport-pin both bands so the axis scrub doesn't depend on sticky sticking. */
 function pinBandFixed(el: HTMLElement, mobile: boolean) {
   el.style.position = "fixed";
-  el.style.top = "50%";
+  el.style.top = "calc(var(--app-h) / 2)";
   el.style.left = "50%";
   el.style.right = "auto";
   el.style.width = mobile ? "100%" : "min(100%, 64rem)";
@@ -150,7 +151,7 @@ export function About() {
     };
 
     const handoffTFromScroll = (mobile: boolean) => {
-      const viewH = window.innerHeight;
+      const viewH = viewportH();
       const top = panel.getBoundingClientRect().top;
       const total = Math.max(panel.offsetHeight - viewH, 1);
       const progress = clamp01(-top / total);
@@ -168,7 +169,7 @@ export function About() {
       const spacing = mobile
         ? Math.min(window.innerWidth * 0.88, 380)
         : Math.min(window.innerWidth * 0.44, 520);
-      const viewH = window.innerHeight;
+      const viewH = viewportH();
       const top = panel.getBoundingClientRect().top;
       const total = Math.max(panel.offsetHeight - viewH, 1);
       const inRunway = top <= 16 && top > -total + 1;
@@ -262,11 +263,21 @@ export function About() {
 
     const syncRunwayHeight = () => {
       const mobile = window.matchMedia("(max-width: 767px)").matches;
-      panel.style.height = `${(mobile ? MOBILE_RUNWAY_VH : RUNWAY_VH) * 100}vh`;
+      panel.style.height = `calc(${mobile ? MOBILE_RUNWAY_VH : RUNWAY_VH} * var(--app-h))`;
     };
 
+    // Same idle cadence as ImageSeries — full rate only while scrolling.
+    let lastScrollY = Number.NaN;
+    let idleFrames = 0;
     const tick = (now: number) => {
-      paint(now);
+      const y = window.scrollY;
+      if (y !== lastScrollY || navHandoff) {
+        lastScrollY = y;
+        idleFrames = 0;
+        paint(now);
+      } else if (++idleFrames % 8 === 0) {
+        paint(now);
+      }
       raf = requestAnimationFrame(tick);
     };
 
@@ -300,7 +311,7 @@ export function About() {
       <div
         ref={panelRef}
         className="about-handoff"
-        style={{ height: `${RUNWAY_VH * 100}vh` }}
+        style={{ height: `calc(${RUNWAY_VH} * var(--app-h))` }}
       >
         <div className="about-handoff__sticky">
           <div
