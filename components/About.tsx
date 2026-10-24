@@ -7,7 +7,11 @@ import {
   Spiral3DSlider,
   type Spiral3DSlide,
 } from "@/components/ui/spiral-3d-slider";
-import { bindMobileAxisScrub } from "@/lib/mobileAxisScrub";
+import {
+  getPagerAboutDelta,
+  getPagerPos,
+  isPagerActive,
+} from "@/lib/mobilePager";
 import { useSoftDrift } from "@/lib/softDrift";
 import { viewportH } from "@/lib/viewport";
 import { AboutPhoto } from "./AboutPhoto";
@@ -164,6 +168,26 @@ export function About() {
     };
 
     const paint = (now = performance.now()) => {
+      if (isPagerActive()) {
+        // Same spacing as the album frames so the bands track the finger 1:1.
+        const spacing = Math.min(window.innerWidth * 0.78, 340);
+        const rel = getPagerAboutDelta();
+        if (aboutEl.style.position) clearBandPin(aboutEl);
+        if (contactEl.style.position) clearBandPin(contactEl);
+        paintBand(aboutEl, rel, spacing, true);
+        paintBand(contactEl, rel - VISUAL_STEP_GAP, spacing, true);
+        // Nav out of an open album: arrive above the leaving scatter (60).
+        const sticky = aboutEl.parentElement;
+        if (sticky) {
+          sticky.style.zIndex = document.documentElement.classList.contains(
+            "series-expand-nav-exit",
+          )
+            ? "65"
+            : "";
+        }
+        return;
+      }
+
       const mobile = window.matchMedia("(max-width: 767px)").matches;
       // Match album spacing — full-width travel so enter/leave clear the screen.
       const spacing = mobile
@@ -266,13 +290,13 @@ export function About() {
       panel.style.height = `calc(${mobile ? MOBILE_RUNWAY_VH : RUNWAY_VH} * var(--app-h))`;
     };
 
-    // Same idle cadence as ImageSeries — full rate only while scrolling.
-    let lastScrollY = Number.NaN;
+    // Same idle cadence as ImageSeries — full rate only while moving.
+    let lastPosKey = Number.NaN;
     let idleFrames = 0;
     const tick = (now: number) => {
-      const y = window.scrollY;
-      if (y !== lastScrollY || navHandoff) {
-        lastScrollY = y;
+      const key = isPagerActive() ? getPagerPos() : window.scrollY;
+      if (key !== lastPosKey || navHandoff) {
+        lastPosKey = key;
         idleFrames = 0;
         paint(now);
       } else if (++idleFrames % 8 === 0) {
@@ -290,13 +314,11 @@ export function About() {
     raf = requestAnimationFrame(tick);
     window.addEventListener("resize", onResize);
     window.addEventListener("about-contact-handoff", onNavHandoff);
-    // Same horizontal scrub as albums — left advances, right reverses.
-    const unbindAxisScrub = bindMobileAxisScrub();
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", onResize);
       window.removeEventListener("about-contact-handoff", onNavHandoff);
-      unbindAxisScrub();
+      if (aboutEl.parentElement) aboutEl.parentElement.style.zIndex = "";
       clearBandPin(aboutEl);
       clearBandPin(contactEl);
     };

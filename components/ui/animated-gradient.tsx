@@ -463,10 +463,16 @@ export function AnimatedGradient({
             const introLen = Math.max(introDuration, 0.01);
             const quietHold = Math.max(introDelay, 0);
 
+            // Phones: the field is soft enough that 3x density is invisible but
+            // costs ~6x the fill — cap it so gestures keep their frame budget.
+            const coarse = window.matchMedia("(pointer: coarse)").matches;
+            let renderRatio = 1;
             const resize = () => {
                 const width = container.clientWidth;
                 const height = container.clientHeight;
-                const pixelRatio = window.devicePixelRatio || 1;
+                const dpr = window.devicePixelRatio || 1;
+                renderRatio = coarse ? Math.min(dpr, 1.25) : dpr;
+                const pixelRatio = renderRatio;
                 canvas.width = width * pixelRatio;
                 canvas.height = height * pixelRatio;
                 canvas.style.width = `${width}px`;
@@ -497,7 +503,7 @@ export function AnimatedGradient({
 
                 gl.uniform1f(uniforms.u_time, elapsed * speed + params.offset * 0.01);
                 gl.uniform2f(uniforms.u_resolution, canvas.width, canvas.height);
-                gl.uniform1f(uniforms.u_pixelRatio, window.devicePixelRatio || 1);
+                gl.uniform1f(uniforms.u_pixelRatio, renderRatio);
                 gl.uniform1f(uniforms.u_scale, params.scale);
                 gl.uniform1f(uniforms.u_rotation, (params.rotation * Math.PI) / 180);
 

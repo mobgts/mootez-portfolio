@@ -57,11 +57,6 @@ html {
     /* Native touch momentum - CSS smooth-scroll fights finger scrolling. */
     scroll-behavior: auto;
   }
-
-  body {
-    /* Horizontal finger travel goes to the album/about axis scrub, never the browser. */
-    touch-action: pan-y pinch-zoom;
-  }
 }
 
 body {
@@ -115,11 +110,45 @@ body {
   will-change: transform, opacity;
 }
 
-/* Phone: denser bands; JS pins them fixed and scrubs the album axis. */
+/*
+ * Phone pager (lib/mobilePager.ts): the document never scrolls. Albums and
+ * About/Contact stack into one screen and move along a single gesture axis.
+ */
 @media (max-width: 767px) {
+  /* Nothing scrolls, so the toolbar never hides — size to the visible screen. */
+  :root {
+    --app-h: 100vh;
+  }
+
+  @supports (height: 100dvh) {
+    :root {
+      --app-h: 100dvh;
+    }
+  }
+
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .story-page {
+    /* Every finger drag belongs to the pager — no pan, no double-tap zoom. */
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Inline runway heights are for desktop scroll. */
+  .image-series__panel,
   .about-handoff {
-    /* aboutHold + handoff + contactHold + 1 — keep in sync with About.tsx */
-    min-height: calc(4.05 * var(--app-h));
+    height: var(--app-h) !important;
+  }
+
+  /* About sits over the albums; only a centered band takes taps (JS). */
+  .story-about {
+    pointer-events: none;
   }
 
   .about-handoff__band {
