@@ -4,6 +4,11 @@ import {
   closeSeriesExpand,
   openSeriesExpand,
 } from "@/content/seriesExpandUi";
+import {
+  getPagerSection,
+  isPagerActive,
+  pagerGoTo,
+} from "@/lib/mobilePager";
 import { setPageHash } from "@/lib/pageHash";
 import { viewportH } from "@/lib/viewport";
 
@@ -129,6 +134,12 @@ function seriesStillActive() {
 
 /** Where the page currently sits for nav choreography. */
 export function currentNavZone(): NavZone {
+  if (isPagerActive()) {
+    const section = getPagerSection();
+    if (section < 0.5) return "albums";
+    return section < 1.5 ? "about" : "contact";
+  }
+
   // Prefer About/Contact once their sticky runway owns the screen.
   if (aboutHandoffOwnsView()) {
     const panel = aboutPanel();
@@ -202,6 +213,11 @@ function snapScroll(top: number) {
  * - about ↔ contact: same left/right motion as scrolling the handoff
  */
 export function jumpToSection(id: JumpSection) {
+  if (isPagerActive()) {
+    jumpPager(id);
+    return;
+  }
+
   const top = sectionTop(id);
   if (top == null) return;
 
@@ -262,6 +278,28 @@ export function jumpToSection(id: JumpSection) {
   snapScroll(top);
 }
 
+/**
+ * Phone pager: slide the axis to the section. From an open album the scatter
+ * leaves left while the section slides in from the right.
+ */
+function jumpPager(id: JumpSection) {
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  setPageHash(id);
+
+  if (isSeriesExpandOpen()) {
+    if (reduce) {
+      closeSeriesExpand();
+      pagerGoTo(id, { instant: true });
+      return;
+    }
+    exitSeriesExpandTo(id);
+    pagerGoTo(id, { arrive: true });
+    return;
+  }
+
+  pagerGoTo(id, { instant: reduce });
+}
+
 export function onNavSectionClick(
   event: { preventDefault(): void },
   id: string,
@@ -277,6 +315,11 @@ export function onBrandClick(event: { preventDefault(): void }) {
   event.preventDefault();
   setPageHash(null);
   if (isSeriesExpandOpen()) closeSeriesExpand();
+  if (isPagerActive()) {
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    pagerGoTo("home", { instant: reduce });
+    return;
+  }
   clearAboutChrome();
   snapScroll(0);
 }

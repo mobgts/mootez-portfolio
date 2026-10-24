@@ -19,6 +19,7 @@ import {
 } from "@/content/seriesExpandUi";
 import { getAlbum } from "@/content/photos";
 import type { Album, Photo } from "@/content/types";
+import { isPagerActive } from "@/lib/mobilePager";
 
 const EXIT_MS = 420;
 /** Fade the lightbox out before restoring scatter scroll. */
@@ -389,8 +390,9 @@ function SeriesExpandView({
       ? Math.min(window.innerWidth * 0.98, 420)
       : Math.min(window.innerWidth * 0.44, 520);
     const travel = 1.9 * spacing;
-    // Contact: exit left. About: exit right.
-    const dir = navExit === "contact" ? -1 : 1;
+    // Contact: exit left. About: exit right. Phone pager: both sections come
+    // in from the right, so the scatter always leaves left.
+    const dir = isPagerActive() || navExit === "contact" ? -1 : 1;
     const start = performance.now();
     let raf = 0;
 

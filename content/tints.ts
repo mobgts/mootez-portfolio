@@ -90,6 +90,33 @@ export function bindTintTopInvalidation() {
 }
 
 /**
+ * Phone pager colour: 0 = albums (first stop), 1 = about, 2 = contact.
+ * Same stops as scroll sampling, without document tops.
+ */
+export function sampleTintAtSection(
+  section: number,
+  stops: TintStop[] = TINT_STOPS,
+): TintSample {
+  const seq = [
+    stops[0],
+    stops.find((s) => s.id === "about"),
+    stops.find((s) => s.id === "contact"),
+  ].filter((s): s is TintStop => s !== undefined);
+  if (seq.length === 0) return { paper: [252, 250, 247], wash: [252, 250, 247] };
+
+  const x = Math.min(Math.max(section, 0), seq.length - 1);
+  const i = Math.min(Math.floor(x), seq.length - 2);
+  if (i < 0) return { paper: [...seq[0].paper], wash: [...seq[0].wash] };
+  const a = seq[i];
+  const b = seq[i + 1];
+  const t = smoothstep(x - i);
+  return {
+    paper: mixRgb(a.paper, b.paper, t),
+    wash: mixRgb(a.wash, b.wash, t),
+  };
+}
+
+/**
  * Colour at a scroll position, graded between the two neighbouring sections.
  *
  * The blend runs on the *fraction* of the gap between two stops, never on a pixel

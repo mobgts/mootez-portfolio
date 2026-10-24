@@ -11,7 +11,12 @@ import {
 } from "@/content/seriesExpandUi";
 import { albums } from "@/content/photos";
 import type { Album, Photo } from "@/content/types";
-import { bindMobileAxisScrub } from "@/lib/mobileAxisScrub";
+import {
+  getPagerPos,
+  isPagerActive,
+  pagerJumpToAlbum,
+  registerPagerAxis,
+} from "@/lib/mobilePager";
 import { useSoftDrift } from "@/lib/softDrift";
 import { viewportH } from "@/lib/viewport";
 function openExpand(
@@ -198,6 +203,25 @@ function visualAtIndex(index: number, positions: number[]) {
   return positions[i0] * (1 - t) + positions[i1] * t;
 }
 
+/** Inverse of visualAtIndex — positions are strictly increasing. */
+function indexAtVisual(visual: number, positions: number[]) {
+  const last = positions.length - 1;
+  if (last <= 0 || visual <= positions[0]) return 0;
+  if (visual >= positions[last]) return last;
+  for (let i = 0; i < last; i++) {
+    if (visual <= positions[i + 1]) {
+      const span = Math.max(positions[i + 1] - positions[i], 0.001);
+      return i + (visual - positions[i]) / span;
+    }
+  }
+  return last;
+}
+
+/** Phone frame spacing — the pager moves one axis unit per spacing of finger. */
+function mobileSpacing() {
+  return Math.min(window.innerWidth * 0.78, 340);
+}
+
 function runwayVh(slots: TrackSlot[], scrollVh = SCROLL_VH) {
   if (slots.length <= 1) return 1;
   let units = 0;
@@ -366,12 +390,8 @@ export function ImageSeries() {
   useSoftDrift(panelRef);
 
   const slots = useMemo(() => buildTrack(), []);
-  const [scrollVh, setScrollVh] = useState(() =>
-    typeof window !== "undefined" &&
-    window.matchMedia("(max-width: 767px)").matches
-      ? MOBILE_SCROLL_VH
-      : SCROLL_VH,
-  );
+  // Server markup uses the desktop runway; the effect below swaps in mobile.
+  const [scrollVh, setScrollVh] = useState(SCROLL_VH);
   const runway = useMemo(() => runwayVh(slots, scrollVh), [slots, scrollVh]);
 
   useEffect(() => {
@@ -425,6 +445,21 @@ export function ImageSeries() {
       const panel = panelRef.current;
       if (!panel) return;
 
+      // Undo a prior nav-exit hide so the series can paint under the expand.
+      const resetSticky = () => {
+        const sticky = panel.querySelector<HTMLElement>(".image-series__sticky");
+        if (!sticky) return;
+        sticky.style.opacity = "";
+        sticky.style.visibility = "";
+        sticky.style.pointerEvents = "";
+      };
+
+      if (isPagerActive()) {
+        pagerJumpToAlbum(albumId);
+        resetSticky();
+        return;
+      }
+
       const firstIdx = slots.findIndex(
         (slot) => slot.kind === "shot" && slot.album.id === albumId,
       );
@@ -451,13 +486,7 @@ export function ImageSeries() {
         html.style.scrollBehavior = "";
       });
 
-      // Undo a prior nav-exit hide so the series can paint under the expand.
-      const sticky = panel.querySelector<HTMLElement>(".image-series__sticky");
-      if (sticky) {
-        sticky.style.opacity = "";
-        sticky.style.visibility = "";
-        sticky.style.pointerEvents = "";
-      }
+      resetSticky();
     };
 
     window.addEventListener("series-focus-album", onFocusAlbum);
@@ -559,14 +588,27 @@ export function ImageSeries() {
       const viewH = viewportH();
       const total = Math.max(panel.offsetHeight - viewH, 1);
       const top = panel.getBoundingClientRect().top;
-      const progress = clamp01(-top / total);
-      const vh = activeScrollVh();
-      const scrollIndex = slotIndexAtProgress(progress, slots, vh);
-      const scrollPlayhead = visualAtIndex(scrollIndex, visualPositions);
+      // Phone pager: position comes from the gesture axis, not scroll.
+      const pager = isPagerActive();
+      let progress: number;
+      let scrollIndex: number;
+      let scrollPlayhead: number;
+      if (pager) {
+        scrollPlayhead = getPagerPos();
+        scrollIndex = indexAtVisual(scrollPlayhead, visualPositions);
+        progress = scrollIndex / Math.max(slots.length - 1, 1);
+      } else {
+        progress = clamp01(-top / total);
+        scrollIndex = slotIndexAtProgress(progress, slots, activeScrollVh());
+        scrollPlayhead = visualAtIndex(scrollIndex, visualPositions);
+      }
+      // Pager: next shot waits on the right and the strip moves left with the
+      // finger (same direction as About → Contact). Desktop scroll moves right.
+      const dir = pager ? -1 : 1;
       const mobile = isMobileSeries();
       // Mobile: a bit tighter than full-width so neighbors sit closer while scrolling.
       const spacing = mobile
-        ? Math.min(window.innerWidth * 0.78, 340)
+        ? mobileSpacing()
         : Math.min(window.innerWidth * 0.44, 520);
       // Titles travel with the frames, but a bit less so the word stays readable.
       const titleTravel = mobile
@@ -627,7 +669,12 @@ export function ImageSeries() {
 
       // Fade frames/titles only — never the sticky shell (that punched a hole
       // onto About sitting underneath and caused the stacked glitch).
-      if (stickyEl) {
+      if (stickyEl && pager) {
+        // Every shot has faded by the time About is centered.
+        stickyEl.style.opacity = "";
+        stickyEl.style.pointerEvents = "";
+        stickyEl.style.visibility = exitT >= 1 ? "hidden" : "";
+      } else if (stickyEl) {
         if (exitT > 0 || drivingAbout || navJump) {
           stickyEl.style.opacity = "";
           stickyEl.style.pointerEvents = seriesOut > 0.2 ? "none" : "";
@@ -645,7 +692,8 @@ export function ImageSeries() {
       const contactBlock = document.querySelector<HTMLElement>(
         "[data-contact-block]",
       );
-      if (aboutArrive) {
+      // Pager: About.tsx paints both bands from the same axis.
+      if (aboutArrive && !pager) {
         const aboutPanel = document.querySelector<HTMLElement>(".about-handoff");
         const aboutPanelTop = aboutPanel?.getBoundingClientRect().top ?? 9999;
         // Mobile chrome / subpixels often sit a few px above 0 — don't require <= 1.
@@ -797,14 +845,16 @@ export function ImageSeries() {
       frames.forEach((frame, frameIdx) => {
         const slotIdx = frameSlotIndex[frameIdx] ?? frameIdx;
         const delta = playhead - visualPositions[slotIdx];
-        const x = delta * spacing;
+        const x = dir * delta * spacing;
         const abs = Math.abs(delta);
         const arc = Math.min(abs, 1.55);
         const y = arc * arc * arcLift;
-        const rot = delta * rotAmt;
+        const rot = dir * delta * rotAmt;
         const scale = 1 - Math.min(abs, 1.25) * scaleAmt;
+        // Pager: the last shot slides off by distance, like an album gap.
         let opacity =
-          (abs < 0.08 ? 1 : Math.max(0, 1 - abs * 0.95)) * (1 - seriesOut);
+          (abs < 0.08 ? 1 : Math.max(0, 1 - abs * 0.95)) *
+          (pager ? 1 : 1 - seriesOut);
         // First album, 2nd picture: fully clear at rest; reveal with the same curve as scroll.
         if (slotIdx === introHideSlotIdx) {
           const unlock = visualPositions[slotIdx] || VISUAL_STEP_SAME;
@@ -843,13 +893,15 @@ export function ImageSeries() {
       const sectionLeave = clamp01(
         (panel.offsetHeight + top - viewH * 0.85) / (viewH * 0.4),
       );
-      const baseOpacity = Math.min(sectionEnter, sectionLeave);
+      // Pager: the stage always fills the screen.
+      const baseOpacity = pager ? 1 : Math.min(sectionEnter, sectionLeave);
+      const parkX = dir * titleTravel;
 
       const expandId = expandAlbumIdRef.current;
       if (expandId) {
         titleLeaveIdRef.current = expandId;
         paintTitleLayer(leaveEl, expandId, 0, Math.max(baseOpacity, 1));
-        paintTitleLayer(enterEl, expandId, titleTravel, 0);
+        paintTitleLayer(enterEl, expandId, parkX, 0);
         return;
       }
 
@@ -867,10 +919,10 @@ export function ImageSeries() {
         paintTitleLayer(
           leaveEl,
           id,
-          exitT * titleTravel,
+          dir * exitT * titleTravel,
           baseOpacity * (1 - leaveT) * (1 - seriesOut),
         );
-        paintTitleLayer(enterEl, id, titleTravel, 0);
+        paintTitleLayer(enterEl, id, parkX, 0);
       } else if (handoff) {
         titleLeaveIdRef.current = handoff.from.id;
         // Leave finishes early; enter rises a beat before the next first frame lands.
@@ -879,13 +931,13 @@ export function ImageSeries() {
         paintTitleLayer(
           leaveEl,
           handoff.from.id,
-          handoff.t * titleTravel,
+          dir * handoff.t * titleTravel,
           baseOpacity * (1 - leaveT),
         );
         paintTitleLayer(
           enterEl,
           handoff.to.id,
-          (handoff.t - 1) * titleTravel,
+          dir * (handoff.t - 1) * titleTravel,
           baseOpacity * enterT,
         );
       } else {
@@ -893,11 +945,13 @@ export function ImageSeries() {
         const id = album?.id ?? titleLeaveIdRef.current;
         titleLeaveIdRef.current = id;
         paintTitleLayer(leaveEl, id, 0, baseOpacity);
-        paintTitleLayer(enterEl, id, titleTravel, 0);
+        paintTitleLayer(enterEl, id, parkX, 0);
       }
     };
 
     const onNavExit = (event: Event) => {
+      // Pager animates its own axis for nav jumps.
+      if (isPagerActive()) return;
       const detail = (event as CustomEvent<{ target?: string }>).detail;
       const target =
         detail?.target === "contact" ? "contact" : ("about" as const);
@@ -937,13 +991,13 @@ export function ImageSeries() {
     };
 
     // Idle frames only repaint occasionally (expand/About flags can still flip)
-    // so taps and native scroll aren't starved on phones.
-    let lastScrollY = Number.NaN;
+    // so taps and the pager aren't starved on phones.
+    let lastPosKey = Number.NaN;
     let idleFrames = 0;
     const tick = (now: number) => {
-      const y = window.scrollY;
-      if (y !== lastScrollY || navExit) {
-        lastScrollY = y;
+      const key = isPagerActive() ? getPagerPos() : window.scrollY;
+      if (key !== lastPosKey || navExit) {
+        lastPosKey = key;
         idleFrames = 0;
         paint(now);
       } else if (++idleFrames % IDLE_PAINT_EVERY === 0) {
@@ -954,17 +1008,35 @@ export function ImageSeries() {
 
     const onResize = () => paint();
 
+    const aboutVisual = visualPositions[exitSlotIdx] ?? 0;
+    const albumStarts: Record<string, number> = {};
+    const stops: number[] = [];
+    slots.forEach((slot, i) => {
+      if (slot.kind !== "shot") return;
+      stops.push(visualPositions[i]);
+      if (albumStarts[slot.album.id] === undefined) {
+        albumStarts[slot.album.id] = visualPositions[i];
+      }
+    });
+    stops.push(aboutVisual, aboutVisual + VISUAL_STEP_GAP);
+    const unregisterPager = registerPagerAxis({
+      stops,
+      about: aboutVisual,
+      contact: aboutVisual + VISUAL_STEP_GAP,
+      albumStarts,
+      unitPx: mobileSpacing,
+    });
+
     // Paint once before the first frame so neighbors never flash over doubles.
     paint();
     raf = requestAnimationFrame(tick);
     window.addEventListener("resize", onResize);
     window.addEventListener("series-nav-exit", onNavExit);
-    const unbindAxisScrub = bindMobileAxisScrub();
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", onResize);
       window.removeEventListener("series-nav-exit", onNavExit);
-      unbindAxisScrub();
+      unregisterPager();
       delete document.documentElement.dataset.aboutFromSeries;
       if (stickyEl) {
         stickyEl.style.opacity = "";

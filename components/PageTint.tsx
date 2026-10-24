@@ -6,9 +6,11 @@ import {
   getVibe,
   mapVibeColor,
   sampleVibeTintAt,
+  sampleVibeTintAtSection,
   subscribeVibe,
   vibeAccents,
 } from "@/content/vibe";
+import { getPagerSection, isPagerActive } from "@/lib/mobilePager";
 
 function rgb(c: [number, number, number]) {
   return `rgb(${Math.round(c[0])} ${Math.round(c[1])} ${Math.round(c[2])})`;
@@ -47,7 +49,9 @@ export function PageTint() {
 
     const readStops = () => {
       warmth = getVibe().color;
-      target = sampleVibeTintAt(window.scrollY, window.innerHeight, warmth);
+      target = isPagerActive()
+        ? sampleVibeTintAtSection(getPagerSection(), warmth)
+        : sampleVibeTintAt(window.scrollY, window.innerHeight, warmth);
     };
 
     const paint = () => {

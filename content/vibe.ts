@@ -1,6 +1,7 @@
 import {
   mixRgb,
   sampleTintAt,
+  sampleTintAtSection,
   TINT_STOPS,
   type TintSample,
   type TintStop,
@@ -163,6 +164,17 @@ export function sampleVibeTintAt(
   const cream = sampleTintAt(scrollY, viewH, CREAM_TINT_STOPS);
   const olive = sampleTintAt(scrollY, viewH, TINT_STOPS);
   const warm = sampleTintAt(scrollY, viewH, WARM_TINT_STOPS);
+  return mixTintTripod(cream, olive, warm, mapVibeColor(warmth));
+}
+
+/** Phone pager: 0 = albums, 1 = about, 2 = contact. */
+export function sampleVibeTintAtSection(
+  section: number,
+  warmth = state.color,
+): TintSample {
+  const cream = sampleTintAtSection(section, CREAM_TINT_STOPS);
+  const olive = sampleTintAtSection(section, TINT_STOPS);
+  const warm = sampleTintAtSection(section, WARM_TINT_STOPS);
   return mixTintTripod(cream, olive, warm, mapVibeColor(warmth));
 }
 
