@@ -540,11 +540,13 @@ html.has-cursor-none * {
 }
 
 .hero-enter--series {
-  transition-delay: 0.48s;
+  transition-delay: 0.58s;
+  transition-duration: 1.15s;
 }
 
 .hero-enter--title {
-  transition-delay: 0.48s;
+  transition-delay: 0.58s;
+  transition-duration: 1.15s;
 }
 
 .hero-enter--copy {

@@ -14,7 +14,7 @@ export const site = {
   email: "boughattas.mootez@hotmail.com",
   linkedin: "https://www.linkedin.com/in/mootez-boughattas-2371261a8",
   nav: [
-    { id: "image", label: "albums" },
+    { id: "image", label: "series" },
     // sound + dev hidden for now
     { id: "about", label: "about" },
     { id: "contact", label: "contact" },

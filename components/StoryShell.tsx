@@ -46,8 +46,8 @@ export function StoryShell({ children }: { children: ReactNode }) {
           key="page-gradient"
           config={gradientConfig}
           introFromSides
-          introDelay={1.25}
-          introDuration={3.2}
+          introDelay={1.05}
+          introDuration={2.6}
           cursorRipple={7}
         />
       </div>
