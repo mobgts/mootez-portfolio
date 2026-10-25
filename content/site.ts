@@ -21,7 +21,7 @@ export const site = {
   ] satisfies NavItem[],
   about: {
     story:
-      "Hey, I am Mootez Boughattas, an independent photographer based in Bonn. I believe in self-expression through stopping motion, and keeping motion too :) I started a journey of holding lenses years ago. I’m honoured to take you through it, and through what and how I see.",
+      "Hey, I am Mootez Boughattas, an independent photographer based in Bonn. I believe in self-expression through stopping motion, and keeping motion too :) I started a journey of holding lenses years ago. I will be taking you through it, and through what and how I see.",
     body: "My style is expanding, but the human element will mostly stay at its core. Sometimes I’m spontaneous with street photography, but lately directing and editorial work have been giving me joy.",
   },
 };

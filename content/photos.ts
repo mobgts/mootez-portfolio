@@ -1,15 +1,26 @@
 import type { Album, Photo } from "./types";
 
-// Drop files into public/photos/<album>/, then register them here.
-// First 3 per album = hero stack + overlay covers.
-// Photos after that = hero singles preview (never repeats stack covers).
-// Unassigned shots live in public/photos/inbox/ until you wire them.
+/**
+ * Photo catalog — one folder per series, numbered files only.
+ *
+ *   public/photos/<albumId>/01.jpg   ← scroll lead 1
+ *   public/photos/<albumId>/02.jpg   ← scroll lead 2
+ *   public/photos/<albumId>/03.jpg   ← scroll lead 3
+ *   public/photos/<albumId>/04.jpg…  ← reel + expand
+ *
+ * Rules (every series):
+ * - Array order MUST match filename order (01, 02, 03…).
+ * - First 3 entries = scroll leads. Overwrite 01.jpg to change lead 1.
+ * - One file per shot. No stack-*, -hq, -2k, series/, or _stage/.
+ * - Staging only: public/photos/inbox/
+ * - Special (not albums): hero/, sets/
+ */
 
 const doublesPhotos: Photo[] = [
   {
     slug: "doubles-01",
     filename: "DOUBLES_01",
-    src: "/photos/doubles/stack-01.jpg",
+    src: "/photos/doubles/01.jpg",
     alt: "Series: doubles — embrace on a fallen trunk",
     year: "'26",
     location: "Forest",
@@ -18,7 +29,7 @@ const doublesPhotos: Photo[] = [
   {
     slug: "doubles-02",
     filename: "DOUBLES_02",
-    src: "/photos/doubles/stack-02.jpg",
+    src: "/photos/doubles/02.jpg",
     alt: "Series: doubles — seated on a fallen trunk",
     year: "'26",
     location: "Forest",
@@ -27,7 +38,7 @@ const doublesPhotos: Photo[] = [
   {
     slug: "doubles-03",
     filename: "DOUBLES_03",
-    src: "/photos/doubles/stack-03.jpg",
+    src: "/photos/doubles/03.jpg",
     alt: "Series: doubles — close embrace on a fallen trunk",
     year: "'26",
     location: "Forest",
@@ -35,95 +46,93 @@ const doublesPhotos: Photo[] = [
   },
 ];
 
-const waterPhotos: Photo[] = [
-  // Stack covers (mixed old + new)
+const drowningPhotos: Photo[] = [
   {
-    slug: "water-01",
-    filename: "WATER_01",
-    src: "/photos/water/09-2k.jpg",
-    alt: "Series: water — splash covering a face in a night pool",
+    slug: "drowning-01",
+    filename: "DROWNING_01",
+    src: "/photos/drowning/01.jpg",
+    alt: "Series: drowning — splash covering a face in a night pool",
     year: "'26",
     location: "Water",
     span: "tall",
   },
   {
-    slug: "water-02",
-    filename: "WATER_02",
-    src: "/photos/water/stack-01.jpg",
-    alt: "Series: water — scream emerging from dark water with flowers",
+    slug: "drowning-02",
+    filename: "DROWNING_02",
+    src: "/photos/drowning/02.jpg",
+    alt: "Series: drowning — scream emerging from dark water with flowers",
     year: "'26",
     location: "Water",
     span: "tall",
   },
   {
-    slug: "water-03",
-    filename: "WATER_03",
-    src: "/photos/water/08-2k.jpg",
-    alt: "Series: water — splash erupting from a night pool",
-    year: "'26",
-    location: "Water",
-    span: "wide",
-  },
-  // Landing singles — lace last so it shows on the hero row
-  {
-    slug: "water-04",
-    filename: "WATER_04",
-    src: "/photos/water/stack-02.jpg",
-    alt: "Series: water — standing waist-deep holding a bouquet",
-    year: "'26",
-    location: "Water",
-    span: "tall",
-  },
-  {
-    slug: "water-05",
-    filename: "WATER_05",
-    src: "/photos/water/06.jpg",
-    alt: "Series: water — kneeling in a blue pool in a green dress",
-    year: "'26",
-    location: "Water",
-    span: "tall",
-  },
-  {
-    slug: "water-06",
-    filename: "WATER_06",
-    src: "/photos/water/stack-03.jpg",
-    alt: "Series: water — submerged face-up with flowers on the chest",
+    slug: "drowning-03",
+    filename: "DROWNING_03",
+    src: "/photos/drowning/03.jpg",
+    alt: "Series: drowning — splash erupting from a night pool",
     year: "'26",
     location: "Water",
     span: "wide",
   },
   {
-    slug: "water-07",
-    filename: "WATER_07",
-    src: "/photos/water/07.jpg",
-    alt: "Series: water — seated in an inflatable pool at night",
+    slug: "drowning-04",
+    filename: "DROWNING_04",
+    src: "/photos/drowning/04.jpg",
+    alt: "Series: drowning — standing waist-deep holding a bouquet",
     year: "'26",
     location: "Water",
     span: "tall",
   },
   {
-    slug: "water-08",
-    filename: "WATER_08",
-    src: "/photos/water/04.jpg",
-    alt: "Series: water — arm rising from dark water with pink flowers",
+    slug: "drowning-05",
+    filename: "DROWNING_05",
+    src: "/photos/drowning/05.jpg",
+    alt: "Series: drowning — kneeling in a blue pool in a green dress",
+    year: "'26",
+    location: "Water",
+    span: "tall",
+  },
+  {
+    slug: "drowning-06",
+    filename: "DROWNING_06",
+    src: "/photos/drowning/06.jpg",
+    alt: "Series: drowning — submerged face-up with flowers on the chest",
     year: "'26",
     location: "Water",
     span: "wide",
   },
   {
-    slug: "water-09",
-    filename: "WATER_09",
-    src: "/photos/water/05.jpg",
-    alt: "Series: water — torso floating in dark water at golden hour",
+    slug: "drowning-07",
+    filename: "DROWNING_07",
+    src: "/photos/drowning/07.jpg",
+    alt: "Series: drowning — seated in an inflatable pool at night",
+    year: "'26",
+    location: "Water",
+    span: "tall",
+  },
+  {
+    slug: "drowning-08",
+    filename: "DROWNING_08",
+    src: "/photos/drowning/08.jpg",
+    alt: "Series: drowning — arm rising from dark water with pink flowers",
     year: "'26",
     location: "Water",
     span: "wide",
   },
   {
-    slug: "water-10",
-    filename: "WATER_10",
-    src: "/photos/water/10-2k.jpg",
-    alt: "Series: water — wet lace dress clinging in dark water",
+    slug: "drowning-09",
+    filename: "DROWNING_09",
+    src: "/photos/drowning/09.jpg",
+    alt: "Series: drowning — torso floating in dark water at golden hour",
+    year: "'26",
+    location: "Water",
+    span: "wide",
+  },
+  {
+    slug: "drowning-10",
+    filename: "DROWNING_10",
+    src: "/photos/drowning/10.jpg",
+    alt: "Series: drowning — wet lace dress clinging in dark water",
     year: "'26",
     location: "Water",
     span: "wide",
@@ -137,9 +146,9 @@ export const albums: Album[] = [
     photos: doublesPhotos,
   },
   {
-    id: "water",
-    label: "series: water",
-    photos: waterPhotos,
+    id: "drowning",
+    label: "series: drowning",
+    photos: drowningPhotos,
   },
 ];
 

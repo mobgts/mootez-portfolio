@@ -19,12 +19,11 @@ import {
 } from "@/content/seriesExpandUi";
 import { getAlbum } from "@/content/photos";
 import type { Album, Photo } from "@/content/types";
-import { isPagerActive } from "@/lib/mobilePager";
 
 const EXIT_MS = 420;
 /** Fade the lightbox out before restoring scatter scroll. */
 const VIEWER_CLOSE_MS = 480;
-/** Match ImageSeries NAV_EXIT_MS — scatter flies right with About/Contact. */
+/** Match ImageSeries NAV_EXIT_MS — scatter leaves left as About/Contact arrive. */
 const NAV_EXIT_MS = 820;
 /** Triple the scatter so scroll can wrap without a seam. */
 const LOOP_COPIES = 3;
@@ -369,7 +368,7 @@ function SeriesExpandView({
   }, [navExit, viewerOpen, clearViewerTimers, clearOriginMarks]);
 
   /**
-   * About: album → right. Contact: album → left (Contact enters from right).
+   * Album leaves left; About/Contact enter from the right.
    * Soft crossfade — photos stay readable until the section is mostly in.
    */
   useEffect(() => {
@@ -390,9 +389,8 @@ function SeriesExpandView({
       ? Math.min(window.innerWidth * 0.98, 420)
       : Math.min(window.innerWidth * 0.44, 520);
     const travel = 1.9 * spacing;
-    // Contact: exit left. About: exit right. Phone pager: both sections come
-    // in from the right, so the scatter always leaves left.
-    const dir = isPagerActive() || navExit === "contact" ? -1 : 1;
+    // About and Contact both come in from the right, so the scatter leaves left.
+    const dir = -1;
     const start = performance.now();
     let raf = 0;
 
@@ -678,20 +676,20 @@ function SeriesExpandView({
                 alt={activePhoto.alt}
                 width={
                   activePhoto.span === "wide"
-                    ? 1600
+                    ? 2400
                     : activePhoto.span === "square"
-                      ? 1400
-                      : 1200
+                      ? 2000
+                      : 1800
                 }
                 height={
                   activePhoto.span === "wide"
-                    ? 1067
+                    ? 1600
                     : activePhoto.span === "square"
-                      ? 1400
-                      : 1600
+                      ? 2000
+                      : 2400
                 }
-                quality={90}
-                sizes="(min-width: 768px) 42vw, 92vw"
+                quality={95}
+                sizes="(min-width: 768px) 70vw, 100vw"
                 className="series-viewer__img"
                 priority
               />
@@ -707,27 +705,29 @@ function SeriesExpandView({
               close
             </button>
 
-            <p className="series-viewer__count" aria-hidden>
-              <span>{pad2((viewerIndex ?? 0) + 1)}</span>
-              <span className="series-viewer__count-sep">–</span>
-              <span>{pad2(total)}</span>
-            </p>
+            <div className="series-viewer__end">
+              <p className="series-viewer__count" aria-hidden>
+                <span>{pad2((viewerIndex ?? 0) + 1)}</span>
+                <span className="series-viewer__count-sep">–</span>
+                <span>{pad2(total)}</span>
+              </p>
 
-            <div className="series-viewer__steps">
-              <button
-                type="button"
-                className="series-viewer__btn"
-                onClick={() => stepViewer(-1)}
-              >
-                prev
-              </button>
-              <button
-                type="button"
-                className="series-viewer__btn"
-                onClick={() => stepViewer(1)}
-              >
-                next
-              </button>
+              <div className="series-viewer__steps">
+                <button
+                  type="button"
+                  className="series-viewer__btn"
+                  onClick={() => stepViewer(-1)}
+                >
+                  prev
+                </button>
+                <button
+                  type="button"
+                  className="series-viewer__btn"
+                  onClick={() => stepViewer(1)}
+                >
+                  next
+                </button>
+              </div>
             </div>
           </div>
         </div>
