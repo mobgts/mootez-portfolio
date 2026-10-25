@@ -208,7 +208,7 @@ function snapScroll(top: number) {
 
 /**
  * Jump / handoff to About or Contact based on where we are:
- * - album expand open → scatter flies right, About/Contact arrive
+ * - album expand open → scatter leaves left, About/Contact arrive from the right
  * - albums → about/contact: skip album scrub (series exit)
  * - about ↔ contact: same left/right motion as scrolling the handoff
  */

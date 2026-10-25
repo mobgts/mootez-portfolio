@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 
-export type CursorKind = "default" | "text" | "spotlight";
+export type CursorKind = "default" | "spotlight";
 
 type Point = { x: number; y: number; fine: boolean; kind: CursorKind };
 
@@ -18,21 +18,7 @@ type CursorApi = {
 
 const CursorContext = createContext<CursorApi | null>(null);
 
-const TEXT_HOST =
-  "h1, h2, h3, h4, p, span, li, a, time, label, figcaption, blockquote, em, strong, small, dt, dd, nav";
-
-function caretHeightFor(el: HTMLElement) {
-  const style = getComputedStyle(el);
-  const fontSize = parseFloat(style.fontSize) || 16;
-  const lineHeight = parseFloat(style.lineHeight);
-  const height = Number.isFinite(lineHeight) ? lineHeight : fontSize * 1.12;
-  return Math.max(8, height);
-}
-
-function kindAtPoint(
-  x: number,
-  y: number,
-): { kind: CursorKind; fontSize: number } {
+function kindAtPoint(x: number, y: number): CursorKind {
   const stack = document.elementsFromPoint(x, y);
 
   for (const node of stack) {
@@ -41,29 +27,16 @@ function kindAtPoint(
     if (node.closest("[data-cursor-through]")) continue;
 
     if (node.closest(".color-still")) {
-      return { kind: "spotlight", fontSize: 16 };
-    }
-
-    const textHost = node.closest<HTMLElement>(TEXT_HOST);
-    if (textHost && !textHost.closest("[data-cursor-through]")) {
-      return { kind: "text", fontSize: caretHeightFor(textHost) };
-    }
-
-    const field = node.closest<HTMLElement>(
-      "input, textarea, [contenteditable='true']",
-    );
-    if (field) {
-      return { kind: "text", fontSize: caretHeightFor(field) };
+      return "spotlight";
     }
   }
 
-  return { kind: "default", fontSize: 16 };
+  return "default";
 }
 
 export function CursorRevealProvider({ children }: { children: ReactNode }) {
   const listeners = useRef(new Set<(point: Point) => void>());
   const followRef = useRef<HTMLDivElement>(null);
-  const cursorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fine = window.matchMedia("(pointer: fine)").matches;
@@ -176,9 +149,7 @@ export function CursorRevealProvider({ children }: { children: ReactNode }) {
       y += (targetY - y) * ease;
 
       const visible = primed && x > -1000;
-      const next = visible
-        ? kindAtPoint(targetX, targetY)
-        : { kind: "default" as CursorKind, fontSize: 16 };
+      const next = visible ? kindAtPoint(targetX, targetY) : "default";
 
       // Speed off the drawn position, so the dot leans exactly as far as it is
       // actually travelling. Skipped across the gap where it leaves and returns.
@@ -192,32 +163,23 @@ export function CursorRevealProvider({ children }: { children: ReactNode }) {
       const heat = Math.min(1, Math.hypot(velX, velY) / 24);
 
       listeners.current.forEach((fn) =>
-        fn({ x, y, fine: true, kind: next.kind }),
+        fn({ x, y, fine: true, kind: next }),
       );
 
       const follow = followRef.current;
-      const cursor = cursorRef.current;
       if (follow) {
         // Stretch along the run and pinch across it, the way a dot of light
-        // smears when you flick it. The caret keeps its shape.
-        const stretch = next.kind === "text" ? 0 : heat;
+        // smears when you flick it.
         const angle = (Math.atan2(velY, velX) * 180) / Math.PI;
         const lean =
-          stretch > 0.01
-            ? ` rotate(${angle}deg) scale(${1 + stretch * 0.7}, ${
-                1 - stretch * 0.32
+          heat > 0.01
+            ? ` rotate(${angle}deg) scale(${1 + heat * 0.7}, ${
+                1 - heat * 0.32
               }) rotate(${-angle}deg)`
             : "";
         follow.style.opacity = visible ? "1" : "0";
         follow.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)${lean}`;
-        follow.style.setProperty("--cursor-heat", stretch.toFixed(3));
-      }
-      if (cursor) {
-        const caret = next.kind === "text";
-        cursor.classList.toggle("is-caret", caret);
-        cursor.style.width = caret ? "2px" : "";
-        cursor.style.height = caret ? `${next.fontSize}px` : "";
-        cursor.style.borderRadius = caret ? "1px" : "";
+        follow.style.setProperty("--cursor-heat", heat.toFixed(3));
       }
 
       raf = requestAnimationFrame(tick);
@@ -253,7 +215,7 @@ export function CursorRevealProvider({ children }: { children: ReactNode }) {
     <CursorContext.Provider value={api}>
       {children}
       <div ref={followRef} className="studio-cursor-follow" aria-hidden>
-        <div ref={cursorRef} className="studio-cursor" />
+        <div className="studio-cursor" />
       </div>
     </CursorContext.Provider>
   );

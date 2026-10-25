@@ -366,7 +366,7 @@ function SeriesFrame({
                 src={frame.src}
                 alt=""
                 fill
-                quality={90}
+                quality={85}
                 sizes="(min-width: 768px) 32vw, 90vw"
                 className="object-cover"
                 priority={priority && i === 0}
@@ -557,7 +557,7 @@ export function ImageSeries() {
     /** After series→About release, never re-pin until the user scrolls back into albums. */
     let releasedToAbout = false;
     const stickyEl = panel.querySelector<HTMLElement>(".image-series__sticky");
-    /** Nav jump: keep current album, fly it right, drop About/Contact from top. */
+    /** Nav jump: keep current album, fly it left, drop About/Contact from the right. */
     let navExit: null | {
       start: number;
       fromIndex: number;
@@ -602,9 +602,9 @@ export function ImageSeries() {
         scrollIndex = slotIndexAtProgress(progress, slots, activeScrollVh());
         scrollPlayhead = visualAtIndex(scrollIndex, visualPositions);
       }
-      // Pager: next shot waits on the right and the strip moves left with the
-      // finger (same direction as About → Contact). Desktop scroll moves right.
-      const dir = pager ? -1 : 1;
+      // Next shot waits on the right; the strip moves left as you advance
+      // (same direction as About → Contact, and with the finger on phones).
+      const dir = -1;
       const mobile = isMobileSeries();
       // Mobile: a bit tighter than full-width so neighbors sit closer while scrolling.
       const spacing = mobile
@@ -624,7 +624,7 @@ export function ImageSeries() {
         lastShot >= 0 && exitSlotIdx > lastShot
           ? clamp01((index - lastShot) / exitSpan)
           : 0;
-      /** Nav jump: skip album scrub; About from left, Contact from right. */
+      /** Nav jump: skip album scrub; album leaves left, section enters from the right. */
       let navJump = false;
       let navTarget: "about" | "contact" | null = null;
 
@@ -632,9 +632,8 @@ export function ImageSeries() {
         const raw = clamp01((now - navExit.start) / NAV_EXIT_MS);
         const ease = easeInOutCubic(raw);
         index = navExit.fromIndex;
-        // About: album exits right. Contact: album exits left.
-        const leaveDir = navExit.target === "contact" ? -1 : 1;
-        playhead = navExit.fromPlayhead + leaveDir * ease * VISUAL_STEP_GAP;
+        // Playhead runs forward, so the album exits left for both targets.
+        playhead = navExit.fromPlayhead + ease * VISUAL_STEP_GAP;
         exitT = ease;
         navJump = true;
         navTarget = navExit.target;
@@ -805,17 +804,13 @@ export function ImageSeries() {
         } else if (!releasedToAbout && exitT > 0 && aboutT < 1) {
           drivingAbout = true;
           document.documentElement.dataset.aboutFromSeries = "1";
-          // Nav jump: About ← left, Contact ← right (album goes the other way).
+          // Nav jump: About / Contact ← right (album leaves left).
           // Scroll leave: About still rises from below.
           const yVh = navJump
             ? 0
             : (1 - aboutEase) * (mobile ? 42 : 56);
           const enterTravel = spacing * VISUAL_STEP_GAP * (mobile ? 0.85 : 0.7);
-          const xPx = navJump
-            ? navTargetContact
-              ? (1 - aboutEase) * enterTravel
-              : -(1 - aboutEase) * enterTravel
-            : 0;
+          const xPx = navJump ? (1 - aboutEase) * enterTravel : 0;
           // Cap About by seriesOut so reverse scroll can't leave both opaque.
           const crossOpacity = navJump
             ? aboutOpacity

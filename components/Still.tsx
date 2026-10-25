@@ -31,12 +31,12 @@ export function Still({
   useEffect(() => {
     if (!reveal || !cursor) return;
 
-    return cursor.subscribe(({ x, y, fine, kind }) => {
+    return cursor.subscribe(({ x, y, fine }) => {
       const root = rootRef.current;
       const color = colorRef.current;
       if (!root || !color) return;
 
-      if (!fine || kind === "text") {
+      if (!fine) {
         color.style.opacity = "0";
         return;
       }

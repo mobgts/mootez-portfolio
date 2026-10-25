@@ -86,7 +86,7 @@ export function openSeriesExpand(
   notify();
 }
 
-/** Leave scatter: About ← album right; Contact ← album left. */
+/** Leave scatter left; About/Contact arrive from the right. */
 export function exitSeriesExpandTo(target: SeriesExpandNavExit) {
   if (!state.albumId) return false;
   if (state.navExit === target) return true;
