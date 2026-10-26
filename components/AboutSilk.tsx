@@ -145,6 +145,11 @@ export function useSilkDrive(sectionRef: RefObject<HTMLElement | null>) {
       const oy = Math.cos(time * 0.38) * 0.005;
       const freq = `${0.014 + ox} ${0.02 + oy}`;
 
+      // Series→About pin: snap clear without SVG filter churn (filter
+      // re-rasterizes every frame and stalls the exit scroll).
+      const fromSeries =
+        document.documentElement.dataset.aboutFromSeries === "1";
+
       for (const { el, strength, warpScale, turb, map } of layersRef.current) {
         const tx = x * strength * (0.55 + fromField * 1.85);
         const ty =
@@ -159,6 +164,17 @@ export function useSilkDrive(sectionRef: RefObject<HTMLElement | null>) {
         if (warpScale < 0.05 || !turb || !map) {
           el.style.removeProperty("filter");
           continue;
+        }
+
+        if (fromSeries) {
+          map.setAttribute("scale", "0");
+          el.style.removeProperty("filter");
+          continue;
+        }
+
+        const filterId = el.querySelector("filter")?.id;
+        if (filterId && !el.style.filter) {
+          el.style.filter = `url(#${filterId})`;
         }
 
         turb.setAttribute("baseFrequency", freq);

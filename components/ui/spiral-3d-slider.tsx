@@ -282,7 +282,8 @@ function GlassEdgePass({
 }
 
 function createGlassPass() {
-  const target = new WebGLRenderTarget(1, 1, { samples: 4 });
+  // No MSAA — 4x samples doubled the About→Contact hitch for little gain here.
+  const target = new WebGLRenderTarget(1, 1, { samples: 0 });
   const material = new ShaderMaterial({
     uniforms: {
       uTexture: { value: target.texture },
@@ -327,6 +328,38 @@ function imageAspect(texture: Texture) {
   return width / Math.max(height, 1);
 }
 
+/** Cap GPU upload size — spiral cards are small; full masters stall first paint. */
+const SPIRAL_TEX_MAX = 1024;
+
+function downscaleTexture(texture: Texture, maxEdge = SPIRAL_TEX_MAX) {
+  const image = texture.image as
+    | HTMLImageElement
+    | HTMLCanvasElement
+    | ImageBitmap
+    | undefined;
+  if (!image) return;
+  const width =
+    "naturalWidth" in image
+      ? image.naturalWidth || image.width
+      : image.width;
+  const height =
+    "naturalHeight" in image
+      ? image.naturalHeight || image.height
+      : image.height;
+  const longest = Math.max(width, height);
+  if (!longest || longest <= maxEdge) return;
+
+  const scale = maxEdge / longest;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(width * scale));
+  canvas.height = Math.max(1, Math.round(height * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  texture.image = canvas;
+  texture.needsUpdate = true;
+}
+
 interface SpiralSceneProps {
   items: Spiral3DSlide[];
   targetProgress: MutableRefObject<number>;
@@ -356,14 +389,8 @@ function SpiralScene({
   reducedMotion,
   lastInteraction,
 }: SpiralSceneProps) {
-  const sceneItems = useMemo(
-    () =>
-      Array.from(
-        { length: Math.max(items.length, 16) },
-        (_, index) => items[index % items.length]!,
-      ),
-    [items],
-  );
+  // Use the curated list as-is — do not pad/wrap (that duplicated the first shots).
+  const sceneItems = items;
   const textures = useLoader(
     TextureLoader,
     sceneItems.map((item) => item.src),
@@ -387,10 +414,12 @@ function SpiralScene({
 
   useEffect(() => {
     textures.forEach((texture) => {
+      downscaleTexture(texture);
       texture.colorSpace = NoColorSpace;
       texture.minFilter = LinearFilter;
       texture.magFilter = LinearFilter;
-      texture.anisotropy = Math.min(8, gl.capabilities.getMaxAnisotropy());
+      texture.generateMipmaps = false;
+      texture.anisotropy = 1;
       texture.needsUpdate = true;
     });
   }, [gl, textures]);
@@ -574,11 +603,11 @@ export function Spiral3DSlider({
         <div className="absolute inset-0">
           <Canvas
             flat
-            dpr={[1, 1.75]}
+            dpr={[1, 1.25]}
             camera={{ position: [0, 0, 10], fov, near: 0.1, far: 100 }}
             gl={{
               alpha: true,
-              antialias: true,
+              antialias: false,
               powerPreference: "high-performance",
               outputColorSpace: LinearSRGBColorSpace,
               toneMapping: NoToneMapping,

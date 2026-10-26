@@ -131,7 +131,8 @@ function ScatterFrame({
           quality={85}
           sizes={sizes}
           className="object-cover"
-          priority={index < 4}
+          priority={index < 2}
+          loading={index < 2 ? "eager" : "lazy"}
         />
       </span>
     </button>

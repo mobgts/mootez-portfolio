@@ -25,6 +25,9 @@
 *.pem
 preview-hero-warp.png
 
+# full-res photo masters (web copies live in public/photos/)
+/_photo-masters/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
