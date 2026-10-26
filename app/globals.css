@@ -763,6 +763,11 @@ html.has-cursor-none * {
   overflow: hidden;
 }
 
+/* Warm gate: hold the frame shape before <Image> mounts. */
+.image-series__photo--pending {
+  background: #221c16;
+}
+
 /* 4th-slot flipbook: stacked frames cut instantly (no crossfade). */
 .image-series__frame--reel .image-series__photo {
   transition: none;

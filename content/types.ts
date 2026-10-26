@@ -17,6 +17,8 @@ export type Album = {
   id: string;
   label: string;
   photos: Photo[];
+  /** When true, the series scrolls on the landing page. Others stay nav-only. */
+  onLanding?: boolean;
 };
 
 export type Set = {

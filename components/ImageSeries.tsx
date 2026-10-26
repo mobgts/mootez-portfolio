@@ -9,7 +9,7 @@ import {
   openSeriesExpand,
   subscribeSeriesExpand,
 } from "@/content/seriesExpandUi";
-import { albums } from "@/content/photos";
+import { landingAlbums as albums } from "@/content/photos";
 import type { Album, Photo } from "@/content/types";
 import {
   getPagerPos,
@@ -324,6 +324,8 @@ function SeriesFrame({
   reelPhotos,
   reelIndex = 0,
   priority = false,
+  warm = false,
+  loadReelExtras = false,
 }: {
   album: Album;
   photo: Photo;
@@ -331,11 +333,32 @@ function SeriesFrame({
   reel?: boolean;
   reelPhotos?: Photo[];
   reelIndex?: number;
-  /** Prefer the landing doubles lead — never warm off-screen reels. */
+  /** First landing lead only — preloads immediately. */
   priority?: boolean;
+  /** When false, skip mounting <Image> (placeholder only). */
+  warm?: boolean;
+  /** Reel: also mount the next flipbook frame; otherwise active frame only. */
+  loadReelExtras?: boolean;
 }) {
   const frames = reel && reelPhotos && reelPhotos.length > 0 ? reelPhotos : [photo];
-  const active = frames[reelIndex % frames.length] ?? photo;
+  const activeIdx = reelIndex % frames.length;
+  const active = frames[activeIdx] ?? photo;
+  // Once a reel frame has decoded, keep the node — remounting on every flip
+  // (esp. people: 11 shots) stalls the series→About exit.
+  const keptRef = useRef<Set<number>>(new Set());
+
+  if (warm) {
+    keptRef.current.add(activeIdx);
+    if (loadReelExtras && reel && frames.length > 1) {
+      keptRef.current.add((activeIdx + 1) % frames.length);
+    }
+  }
+
+  const shouldMount = (i: number) => {
+    if (!warm) return false;
+    if (!reel) return true;
+    return keptRef.current.has(i);
+  };
 
   return (
     <button
@@ -354,7 +377,17 @@ function SeriesFrame({
     >
       <span className="image-series__frame-inner">
         {frames.map((frame, i) => {
-          const on = i === reelIndex % frames.length;
+          const on = i === activeIdx;
+          if (!shouldMount(i)) {
+            return on ? (
+              <span
+                key={frame.slug}
+                className="image-series__photo image-series__photo--pending"
+                aria-hidden
+                style={{ opacity: 1 }}
+              />
+            ) : null;
+          }
           return (
             <span
               key={frame.slug}
@@ -370,6 +403,7 @@ function SeriesFrame({
                 sizes="(min-width: 768px) 32vw, 90vw"
                 className="object-cover"
                 priority={priority && i === 0}
+                loading={priority && i === 0 ? "eager" : "lazy"}
               />
             </span>
           );
@@ -424,9 +458,38 @@ export function ImageSeries() {
   const [reelIndex, setReelIndex] = useState(0);
   const [activeReelSlot, setActiveReelSlot] = useState<number | null>(null);
   const reelActiveRef = useRef<number | null>(null);
+  /** Inclusive shot-slot index that may mount <Image>. Starts at first lead only. */
+  const [warmThrough, setWarmThrough] = useState(0);
+  const warmThroughRef = useRef(0);
   const titleLeaveIdRef = useRef(albums[0]?.id ?? "");
   /** While expand is open, pin the big title to that album (nav can open any series). */
   const expandAlbumIdRef = useRef<string | null>(getSeriesExpand().albumId);
+
+  // Stagger landing decode: first lead now → rest of first album.
+  // Later albums warm only from scroll (one shot ahead) so people→About isn't
+  // fighting a burst decode of the whole runway.
+  useEffect(() => {
+    const n = shotSlots.length;
+    if (n <= 1) return;
+    const firstId = albums[0]?.id;
+    let firstAlbumEnd = 0;
+    if (firstId) {
+      for (let i = 0; i < n; i++) {
+        if (shotSlots[i]?.album.id === firstId) firstAlbumEnd = i;
+        else break;
+      }
+    }
+    const bump = (idx: number) => {
+      const next = Math.min(Math.max(idx, 0), n - 1);
+      if (next <= warmThroughRef.current) return;
+      warmThroughRef.current = next;
+      setWarmThrough(next);
+    };
+    const t1 = window.setTimeout(() => bump(firstAlbumEnd), 1100);
+    return () => {
+      window.clearTimeout(t1);
+    };
+  }, [shotSlots]);
 
   useEffect(() => {
     const sync = () => {
@@ -865,12 +928,14 @@ export function ImageSeries() {
 
       // Stay flipping while the 4th frame is the visual focus (gap weight is
       // >1, so a tight ±0.45 window died before the shot looked "parked").
+      // Stop as soon as About exit starts — flipbook remounts + About silk
+      // fight for the main thread on the people → profile handoff.
       let onReel: number | null = null;
       for (const [slotIdx] of reelSlotIndexes) {
         if (
           Math.abs(index - slotIdx) < 0.72 &&
           progress > 0.02 &&
-          exitT < 0.2 &&
+          exitT <= 0 &&
           !navJump
         ) {
           onReel = slotIdx;
@@ -881,6 +946,26 @@ export function ImageSeries() {
         reelActiveRef.current = onReel;
         setActiveReelSlot(onReel);
         if (onReel != null) setReelIndex(0);
+      }
+
+      // Keep one shot ahead of the playhead warm so scroll never hits an empty frame.
+      // Skip during About exit — no new decode work mid-handoff.
+      if (exitT <= 0 && !navJump) {
+        let nearestFrame = 0;
+        let best = Infinity;
+        for (let frameIdx = 0; frameIdx < frames.length; frameIdx++) {
+          const slotIdx = frameSlotIndex[frameIdx] ?? frameIdx;
+          const d = Math.abs(index - slotIdx);
+          if (d < best) {
+            best = d;
+            nearestFrame = frameIdx;
+          }
+        }
+        const ahead = Math.min(nearestFrame + 1, frames.length - 1);
+        if (ahead > warmThroughRef.current) {
+          warmThroughRef.current = ahead;
+          setWarmThrough(ahead);
+        }
       }
 
       // Full when the sticky fills the viewport (landing included); fade only at edges.
@@ -1095,6 +1180,8 @@ export function ImageSeries() {
                     reelPhotos={slot.reelPhotos}
                     reelIndex={flipping ? reelIndex : 0}
                     priority={shotIdx === 0}
+                    warm={shotIdx <= warmThrough}
+                    loadReelExtras={flipping}
                   />
                 );
               })}

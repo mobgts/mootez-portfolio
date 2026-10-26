@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { heroPhoto, photos } from "@/content/photos";
+import { heroPhoto, spiralPhotos } from "@/content/photos";
 import { site } from "@/content/site";
 import {
   Spiral3DSlider,
@@ -17,7 +17,8 @@ import { viewportH } from "@/lib/viewport";
 import { AboutPhoto } from "./AboutPhoto";
 import { SilkArrive, useSilkDrive } from "./AboutSilk";
 
-const spiralSlides: Spiral3DSlide[] = photos.map((photo) => ({
+/** Curated mix across all series — see `spiralPhotos` in content/photos.ts. */
+const spiralSlides: Spiral3DSlide[] = spiralPhotos.map((photo) => ({
   src: photo.src,
   alt: photo.alt,
 }));
@@ -116,6 +117,8 @@ export function About() {
   useSoftDrift(sectionRef);
   // 3D spiral is desktop-only — skip mount on phone (no WebGL cost).
   const [showSpiral, setShowSpiral] = useState(false);
+  /** Mount WebGL only once Contact actually owns the view (not on About arrive). */
+  const [spiralNear, setSpiralNear] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
     const sync = () => setShowSpiral(mq.matches);
@@ -123,6 +126,47 @@ export function About() {
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
   }, []);
+  // Warm HTTP cache while still on albums / About — TextureLoader then hits disk/cache.
+  useEffect(() => {
+    if (!showSpiral) return;
+    let cancelled = false;
+    const warm = () => {
+      if (cancelled) return;
+      for (const photo of spiralPhotos) {
+        const img = new window.Image();
+        img.decoding = "async";
+        img.src = photo.src;
+      }
+    };
+    const ric = window.requestIdleCallback;
+    const id = ric
+      ? ric(warm, { timeout: 5000 })
+      : window.setTimeout(warm, 2800);
+    return () => {
+      cancelled = true;
+      if (ric && typeof id === "number") window.cancelIdleCallback(id);
+      else window.clearTimeout(id);
+    };
+  }, [showSpiral]);
+  useEffect(() => {
+    if (!showSpiral) {
+      setSpiralNear(false);
+      return;
+    }
+    const el = contactRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        // Require real Contact visibility — 240px margin was starting WebGL on About.
+        if (entry?.isIntersecting && entry.intersectionRatio >= 0.35) {
+          setSpiralNear(true);
+        }
+      },
+      { threshold: [0, 0.35, 0.6] },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [showSpiral]);
 
   useEffect(() => {
     const panel = panelRef.current;
@@ -411,13 +455,20 @@ export function About() {
 
             {showSpiral ? (
               <div className="min-w-0 w-full md:h-full">
-                <Spiral3DSlider
-                  items={spiralSlides}
-                  autoRotate
-                  autoSpeed={0.13}
-                  className="min-h-[480px] lg:min-h-[560px]"
-                  ariaLabel="Selected photography spiral gallery"
-                />
+                {spiralNear ? (
+                  <Spiral3DSlider
+                    items={spiralSlides}
+                    autoRotate
+                    autoSpeed={0.13}
+                    className="min-h-[480px] lg:min-h-[560px]"
+                    ariaLabel="Selected photography spiral gallery"
+                  />
+                ) : (
+                  <div
+                    className="min-h-[480px] lg:min-h-[560px]"
+                    aria-hidden
+                  />
+                )}
               </div>
             ) : null}
           </div>
